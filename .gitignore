@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Production build output
+dist/
+
+# Database file (contains sensitive data)
+server/anbk_database.json
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+
+# Vite cache
+.vite/
