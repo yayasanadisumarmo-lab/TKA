@@ -93,11 +93,25 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
       }
     });
 
-    // Save non-duplicates immediately
-    nonDuplicates.forEach(q => {
-      saveQuestionToMapel(mapelId, mapelLabel, q);
-      savedIds.push(q.id);
-    });
+    // Batch-save all non-duplicates at once to avoid sequential read/write issues
+    if (nonDuplicates.length > 0) {
+      const STORAGE_KEY = 'ANKB_BANK_SOAL_V1';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const bank = raw ? JSON.parse(raw) : {};
+      
+      if (!bank[mapelId]) {
+        bank[mapelId] = { title: mapelLabel, questions: [] };
+      }
+
+      nonDuplicates.forEach((q, idx) => {
+        const uniqueId = Date.now() + (idx + 1) * 1000 + Math.floor(Math.random() * 999);
+        const questionWithId = { ...q, id: uniqueId };
+        bank[mapelId].questions.push(questionWithId);
+        savedIds.push(uniqueId);
+      });
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(bank));
+    }
 
     if (duplicateItems.length > 0) {
       setDupQueue(duplicateItems);
@@ -203,7 +217,7 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
                 : 'text-slate-600 hover:bg-slate-200/60'
             }`}
           >
-            <UploadCloud className="w-4 h-4" /> 📁 Unggah File Word (.docx / .txt)
+            <UploadCloud className="w-4 h-4" /> 📁 Unggah File Teks (.txt / .docx)
           </button>
 
           <button
@@ -221,17 +235,17 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
         {/* Modal Body (Scrollable) */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
           
-          {/* TAB 1: UPLOAD FILE WORD */}
+          {/* TAB 1: UPLOAD FILE TEKS */}
           {activeTab === 'upload' && (
             <div className="space-y-4">
               {/* Download Template Banner */}
               <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h4 className="font-extrabold text-sm text-blue-950 flex items-center gap-1.5">
-                    <FileCode className="w-4 h-4 text-[#0052cc]" /> Format / Template Soal Word (.docx / .txt)
+                    <FileCode className="w-4 h-4 text-[#0052cc]" /> Format / Template Soal Teks (.txt / .docx)
                   </h4>
                   <p className="text-xs text-slate-600 font-medium mt-0.5">
-                    Unduh contoh format penulisan soal agar dokumen Word Anda dapat terbaca secara otomatis.
+                    Unduh contoh format penulisan soal agar dokumen teks Anda dapat terbaca secara otomatis.
                   </p>
                 </div>
 
@@ -240,7 +254,7 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
                   onClick={generateSampleWordTemplate}
                   className="bg-white hover:bg-blue-100 text-[#0052cc] border border-blue-300 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4" /> Unduh Format Template
+                  <Download className="w-4 h-4" /> Unduh Format Template (.txt)
                 </button>
               </div>
 
@@ -249,7 +263,7 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
                 <label className="block border-2 border-dashed border-slate-300 hover:border-[#0052cc] bg-slate-50/60 rounded-2xl p-6 text-center cursor-pointer transition-colors">
                   <input
                     type="file"
-                    accept=".docx, .doc, .txt"
+                    accept=".txt, .docx, .doc"
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -257,9 +271,9 @@ export default function ImportDocxModal({ isOpen, onClose, selectedMapelObj, onI
                     <UploadCloud className="w-6 h-6" />
                   </div>
                   <p className="text-xs md:text-sm font-bold text-slate-800">
-                    Pilih atau Tarik File Word <span className="text-[#0052cc] underline">(.docx)</span> ke sini
+                    Pilih atau Tarik File Teks <span className="text-[#0052cc] underline">(.txt)</span> atau Word <span className="text-[#0052cc] underline">(.docx)</span> ke sini
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-1">Mendukung file Microsoft Word (.docx) atau file teks (.txt)</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Mendukung file teks (.txt) atau Microsoft Word (.docx)</p>
                 </label>
               </div>
             </div>

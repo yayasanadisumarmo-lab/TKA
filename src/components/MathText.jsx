@@ -13,9 +13,11 @@ function autoFormatPlainMath(inputStr) {
   // 1. Fix double backslashes (e.g. \\sqrt -> \sqrt, \\frac -> \frac, \\ge -> \ge)
   str = str.replace(/\\\\([a-zA-Z]+)/g, '\\$1');
 
-  // 2. Convert plain text sqrt(...) or sqrt{...} -> \sqrt{...}
-  str = str.replace(/sqrt\(([^)]+)\)/gi, '\\sqrt{$1}');
-  str = str.replace(/sqrt\{([^}]+)\}/gi, '\\sqrt{$1}');
+  // 2. Convert any plain text sqrt(...) or sqrt{...} or sqrt 2x+3 -> \sqrt{...}
+  str = str.replace(/\\?sqrt\(([^)]+)\)/gi, '\\sqrt{$1}');
+  str = str.replace(/\\?sqrt\{([^}]+)\}/gi, '\\sqrt{$1}');
+  // Match sqrt followed by expression like sqrt2x + 3 or sqrt 2x + 3
+  str = str.replace(/\\?sqrt\s*([0-9a-zA-Z]+(?:\s*[\+\-\*\/]\s*[0-9a-zA-Z]+)*)/gi, '\\sqrt{$1}');
 
   // 3. Convert f^(-1)(x) or f^-1(x) -> f^{-1}(x)
   str = str.replace(/f\^?\(?-1\)?\(([^)]+)\)/g, 'f^{-1}($1)');
@@ -48,70 +50,41 @@ export default function MathText({ text = '', className = '' }) {
 
   const formattedText = autoFormatPlainMath(text);
 
-  // Split string into text and math segments ($...$ or $$...$$)
-  const regex = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/g;
-  const parts = formattedText.split(regex);
+  // Array to store rendered KaTeX HTML strings
+  const mathPlaceholders = [];
+
+  // Match $$...$$ and $...$
+  const processedText = formattedText.replace(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/g, (match) => {
+    const isDisplay = match.startsWith('$$');
+    const mathContent = isDisplay ? match.slice(2, -2).trim() : match.slice(1, -1).trim();
+
+    try {
+      const katexHtml = katex.renderToString(mathContent, {
+        displayMode: isDisplay,
+        throwOnError: false
+      });
+      const placeholder = `___MATH_PH_${mathPlaceholders.length}___`;
+      mathPlaceholders.push(
+        `<span class="${isDisplay ? 'my-2 block text-center overflow-x-auto py-1' : 'inline-block mx-0.5'}">${katexHtml}</span>`
+      );
+      return placeholder;
+    } catch (e) {
+      return match;
+    }
+  });
+
+  // Convert newlines to <br /> for plain text sections
+  let htmlResult = processedText.replace(/\n/g, '<br />');
+
+  // Restore KaTeX rendered math HTML
+  mathPlaceholders.forEach((katexMarkup, idx) => {
+    htmlResult = htmlResult.replace(`___MATH_PH_${idx}___`, katexMarkup);
+  });
 
   return (
-    <span className={className}>
-      {parts.map((part, idx) => {
-        if (part.startsWith('$$') && part.endsWith('$$')) {
-          const mathContent = part.slice(2, -2).trim();
-          try {
-            const html = katex.renderToString(mathContent, {
-              displayMode: true,
-              throwOnError: false
-            });
-            return (
-              <span
-                key={idx}
-                className="my-2 block text-center overflow-x-auto py-1"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch (e) {
-            return <span key={idx}>{part}</span>;
-          }
-        } else if (part.startsWith('$') && part.endsWith('$')) {
-          const mathContent = part.slice(1, -1).trim();
-          try {
-            const html = katex.renderToString(mathContent, {
-              displayMode: false,
-              throwOnError: false
-            });
-            return (
-              <span
-                key={idx}
-                className="inline-block mx-0.5"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch (e) {
-            return <span key={idx}>{part}</span>;
-          }
-        }
-
-        // Check if plain part contains un-wrapped LaTeX commands
-        if (part.includes('\\sqrt') || part.includes('\\frac') || part.includes('f^{-1}')) {
-          try {
-            const html = katex.renderToString(part, {
-              displayMode: false,
-              throwOnError: false
-            });
-            return (
-              <span
-                key={idx}
-                className="inline-block mx-0.5"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch (e) {
-            return <span key={idx}>{part}</span>;
-          }
-        }
-
-        return <span key={idx}>{part}</span>;
-      })}
-    </span>
+    <span
+      className={className}
+      dangerouslySetInnerHTML={{ __html: htmlResult }}
+    />
   );
 }

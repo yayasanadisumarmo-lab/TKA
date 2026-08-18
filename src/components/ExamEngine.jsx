@@ -77,6 +77,7 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState(savedBackup?.lastAutoSaveTime || '');
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   // Timer Effect
   useEffect(() => {
@@ -368,8 +369,15 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
             )}
 
             {currentQ.stimulusImage && (
-              <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl">
-                <img src={currentQ.stimulusImage} alt="Gambar Soal" className="max-h-64 rounded-xl mx-auto object-contain" />
+              <div
+                className="p-2 bg-slate-50 border border-slate-200 rounded-2xl cursor-zoom-in group relative"
+                onClick={() => setZoomedImage(currentQ.stimulusImage)}
+                title="Klik untuk memperbesar gambar stimulus"
+              >
+                <img src={currentQ.stimulusImage} alt="Gambar Soal" className="max-h-80 md:max-h-[380px] w-full rounded-xl mx-auto object-contain bg-white p-1" />
+                <div className="mt-2 text-center text-xs font-bold text-[#007bff] bg-blue-50/90 py-1 px-3 rounded-lg border border-blue-200 flex items-center justify-center gap-1">
+                  🔍 Klik gambar untuk memperbesar (Zoom Ukuran Penuh)
+                </div>
               </div>
             )}
 
@@ -398,7 +406,9 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
             {/* 1. SINGLE CHOICE (PILIHAN GANDA PG) */}
             {currentQ.type === 'single' && currentQ.options && (
               <div className="space-y-3">
-                {currentQ.options.map(opt => {
+                {currentQ.options
+                  .filter(opt => (opt.text && opt.text.trim().length > 0) || opt.image)
+                  .map(opt => {
                   const isSelected = answers[currentQ.id] === opt.key;
                   return (
                     <div
@@ -424,8 +434,22 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
                         <span className="font-bold text-blue-900 mr-2">{opt.key}.</span>
                         <MathText text={opt.text} />
                         {opt.image && (
-                          <div className="mt-2">
-                            <img src={opt.image} alt={`Opsi ${opt.key}`} className="h-28 rounded-lg object-contain border bg-slate-50" />
+                          <div
+                            className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#007bff] transition-all cursor-zoom-in group"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedImage(opt.image);
+                            }}
+                            title={`Klik untuk memperbesar gambar opsi ${opt.key}`}
+                          >
+                            <img
+                              src={opt.image}
+                              alt={`Opsi ${opt.key}`}
+                              className="max-h-64 md:max-h-80 w-full rounded-lg object-contain bg-white p-1 shadow-xs"
+                            />
+                            <div className="mt-1 text-[11px] font-bold text-[#007bff] bg-blue-50/90 py-1 px-2 rounded-lg text-center border border-blue-200 flex items-center justify-center gap-1">
+                              🔍 Klik untuk memperbesar gambar opsi {opt.key}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -438,7 +462,9 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
             {/* 2. COMPLEX MULTI CHOICE (PILIHAN GANDA KOMPLEKS) */}
             {currentQ.type === 'complex' && currentQ.options && (
               <div className="space-y-3">
-                {currentQ.options.map(opt => {
+                {currentQ.options
+                  .filter(opt => (opt.text && opt.text.trim().length > 0) || opt.image)
+                  .map(opt => {
                   const currentSelected = answers[currentQ.id] || [];
                   const isSelected = Array.isArray(currentSelected) 
                     ? currentSelected.includes(opt.key) 
@@ -467,8 +493,22 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
                         <span className="font-bold text-amber-900 mr-2">{opt.key}.</span>
                         <MathText text={opt.text} />
                         {opt.image && (
-                          <div className="mt-2">
-                            <img src={opt.image} alt={`Opsi ${opt.key}`} className="h-28 rounded-lg object-contain border bg-slate-50" />
+                          <div
+                            className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl hover:border-amber-500 transition-all cursor-zoom-in group"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedImage(opt.image);
+                            }}
+                            title={`Klik untuk memperbesar gambar opsi ${opt.key}`}
+                          >
+                            <img
+                              src={opt.image}
+                              alt={`Opsi ${opt.key}`}
+                              className="max-h-64 md:max-h-80 w-full rounded-lg object-contain bg-white p-1 shadow-xs"
+                            />
+                            <div className="mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 py-1 px-2 rounded-lg text-center border border-amber-200 flex items-center justify-center gap-1">
+                              🔍 Klik untuk memperbesar gambar opsi {opt.key}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -478,40 +518,88 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
               </div>
             )}
 
-            {/* 3. MATRIX CATEGORIZATION TABLE (MENJODOHKAN / MATRIKS) */}
+            {/* 3. MATRIX CATEGORIZATION TABLE (MENJODOHKAN / MATRIKS / BENAR - SALAH) */}
             {currentQ.type === 'matrix' && currentQ.matrixHeaders && (
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs md:text-sm">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+              <div className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                <table className="w-full text-left text-xs md:text-sm border-collapse">
+                  <thead className="bg-slate-100 border-b-2 border-slate-200 text-slate-800 font-extrabold">
                     <tr>
-                      <th className="p-3">{currentQ.matrixHeaders[0]}</th>
-                      <th className="p-3 text-center w-28">{currentQ.matrixHeaders[1]}</th>
-                      <th className="p-3 text-center w-28">{currentQ.matrixHeaders[2]}</th>
+                      <th className="p-3 text-center w-12 border-r border-slate-200">#</th>
+                      <th className="p-3 border-r border-slate-200">{currentQ.matrixHeaders[0] || 'Pernyataan'}</th>
+                      <th className="p-3 text-center w-28 md:w-36 border-r border-slate-200 bg-blue-50/60 text-[#007bff]">
+                        {currentQ.matrixHeaders[1]?.replace(/\s*\(.*?\)/g, '') || 'Benar'}
+                      </th>
+                      <th className="p-3 text-center w-28 md:w-36 bg-rose-50/60 text-rose-700">
+                        {currentQ.matrixHeaders[2]?.replace(/\s*\(.*?\)/g, '') || 'Salah'}
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 text-slate-700">
-                    {currentQ.matrixRows?.map(row => {
+                  <tbody className="divide-y divide-slate-200 text-slate-800">
+                    {currentQ.matrixRows?.map((row, rIdx) => {
                       const userChoice = matrixAnswers[currentQ.id]?.[row.id];
+                      const col1Name = currentQ.matrixHeaders[1];
+                      const col2Name = currentQ.matrixHeaders[2];
+
+                      const isCol1Selected = userChoice === col1Name;
+                      const isCol2Selected = userChoice === col2Name;
+
+                      const rowLabel = String.fromCharCode(65 + rIdx); // A., B., C...
+
+                      const col1Clean = col1Name?.replace(/\s*\(.*?\)/g, '') || 'Benar';
+                      const col2Clean = col2Name?.replace(/\s*\(.*?\)/g, '') || 'Salah';
+
                       return (
-                        <tr key={row.id} className="hover:bg-slate-50/60">
-                          <td className="p-3 font-medium"><MathText text={row.text} /></td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="radio"
-                              name={`matrix-${currentQ.id}-${row.id}`}
-                              checked={userChoice === currentQ.matrixHeaders[1]}
-                              onChange={() => handleMatrixSelection(row.id, currentQ.matrixHeaders[1])}
-                              className="w-4 h-4 text-[#007bff] focus:ring-[#007bff] cursor-pointer"
-                            />
+                        <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                          {/* Row Letter (#) */}
+                          <td className="p-3 text-center font-bold text-slate-500 border-r border-slate-200 bg-slate-50/50">
+                            {rowLabel}.
                           </td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="radio"
-                              name={`matrix-${currentQ.id}-${row.id}`}
-                              checked={userChoice === currentQ.matrixHeaders[2]}
-                              onChange={() => handleMatrixSelection(row.id, currentQ.matrixHeaders[2])}
-                              className="w-4 h-4 text-[#007bff] focus:ring-[#007bff] cursor-pointer"
-                            />
+
+                          {/* Statement Content */}
+                          <td className="p-3 font-semibold border-r border-slate-200 leading-relaxed">
+                            <MathText text={row.text} />
+                          </td>
+
+                          {/* Option Column 1 (Benar) */}
+                          <td
+                            onClick={() => handleMatrixSelection(row.id, col1Name)}
+                            className={`p-3 text-center border-r border-slate-200 cursor-pointer select-none transition-all ${
+                              isCol1Selected ? 'bg-blue-100/90 font-bold' : 'hover:bg-blue-50/60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <input
+                                type="radio"
+                                name={`matrix-${currentQ.id}-${row.id}`}
+                                checked={isCol1Selected}
+                                onChange={() => handleMatrixSelection(row.id, col1Name)}
+                                className="w-5 h-5 text-[#007bff] focus:ring-[#007bff] cursor-pointer"
+                              />
+                              <span className={`text-xs font-extrabold ${isCol1Selected ? 'text-blue-950' : 'text-slate-600'}`}>
+                                {col1Clean}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Option Column 2 (Salah) */}
+                          <td
+                            onClick={() => handleMatrixSelection(row.id, col2Name)}
+                            className={`p-3 text-center cursor-pointer select-none transition-all ${
+                              isCol2Selected ? 'bg-rose-100/90 font-bold' : 'hover:bg-rose-50/60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <input
+                                type="radio"
+                                name={`matrix-${currentQ.id}-${row.id}`}
+                                checked={isCol2Selected}
+                                onChange={() => handleMatrixSelection(row.id, col2Name)}
+                                className="w-5 h-5 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                              />
+                              <span className={`text-xs font-extrabold ${isCol2Selected ? 'text-rose-950' : 'text-slate-600'}`}>
+                                {col2Clean}
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -727,6 +815,38 @@ export default function ExamEngine({ sessionData, onFinishExam, onReviewResults 
               >
                 Tutup
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN IMAGE ZOOM MODAL (LIGHTBOX) */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setZoomedImage(null)}
+              className="bg-white/20 hover:bg-white/40 text-white font-black px-4 py-2 rounded-xl text-xs backdrop-blur-md transition-all shadow-lg border border-white/30"
+            >
+              ✕ Tutup (Esc)
+            </button>
+          </div>
+
+          <div
+            className="max-w-5xl max-h-[85vh] p-3 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={zoomedImage}
+              alt="Gambar Diperbesar"
+              className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl"
+            />
+            <div className="mt-2 text-xs font-bold text-slate-500 flex items-center gap-1">
+              🔍 Tampilan Ukuran Penuh (Resolusi Tinggi)
             </div>
           </div>
         </div>

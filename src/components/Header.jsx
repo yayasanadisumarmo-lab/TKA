@@ -1,8 +1,12 @@
 import React from 'react';
-import { ShieldCheck, LogOut } from 'lucide-react';
+import { ShieldCheck, LogOut, KeyRound } from 'lucide-react';
 
 export default function Header({ loggedInUser, activePage, onChangePage, onReset, onAdminLoginTrigger }) {
   const isAdmin = loggedInUser?.role === 'admin';
+  const isGuru = loggedInUser?.role === 'guru';
+  const isStaff = isAdmin || isGuru;
+
+  const roleLabel = isAdmin ? 'Super Admin' : (isGuru ? 'Guru' : 'Siswa');
 
   return (
     <header className="w-full bg-[#2e63a5] text-white py-3 px-4 md:px-8 shadow-md sticky top-0 z-40 border-b border-blue-900/20 font-['Plus_Jakarta_Sans',sans-serif]">
@@ -31,9 +35,11 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
           </div>
         </div>
 
-        {/* Center / Navigation Menu Switcher (ONLY VISIBLE WHEN LOGGED IN AS ADMIN / GURU) */}
-        {isAdmin && (
-          <div className="flex items-center gap-1.5 bg-blue-900/40 p-1 rounded-full border border-blue-400/20 text-xs font-bold animate-in fade-in zoom-in-95 duration-200">
+        {/* Center / Navigation Menu Switcher (VISIBLE WHEN LOGGED IN AS GURU / ADMIN) */}
+        {isStaff && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5 bg-blue-900/40 p-1 rounded-full border border-blue-400/20 text-xs font-bold animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Simulasi Ujian (Guru & Admin) */}
             <button
               onClick={() => onChangePage('simulasi')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
@@ -43,6 +49,7 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
               🎓 Simulasi Ujian
             </button>
 
+            {/* Bank & Kelola Soal (Guru & Admin) */}
             <button
               onClick={() => onChangePage('bank_soal')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
@@ -52,6 +59,7 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
               📚 Bank & Kelola Soal
             </button>
 
+            {/* Live Progress (Guru & Admin) */}
             <button
               onClick={() => onChangePage('live_monitoring')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
@@ -61,6 +69,7 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
               📊 Live Progress
             </button>
 
+            {/* Pengaturan Jadwal (Guru & Admin) */}
             <button
               onClick={() => onChangePage('pengaturan_jadwal')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
@@ -70,14 +79,27 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
               ⚙️ Pengaturan Jadwal
             </button>
 
+            {/* Laporan Hasil Ujian & Nilai (Guru & Admin) */}
             <button
-              onClick={() => onChangePage('tambah_peserta')}
+              onClick={() => onChangePage('laporan_hasil')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
-                activePage === 'tambah_peserta' ? 'bg-[#007bff] text-white shadow-sm' : 'text-blue-100 hover:text-white'
+                activePage === 'laporan_hasil' ? 'bg-[#007bff] text-white shadow-sm font-bold' : 'text-blue-100 hover:text-white'
               }`}
             >
-              👤 Kelola Peserta
+              📑 Laporan Hasil Ujian
             </button>
+
+            {/* Menu Setting Master Data (HANYA UNTUK SUPER ADMIN BISA KEMANA-MANA) */}
+            {isAdmin && (
+              <button
+                onClick={() => onChangePage('pengaturan_database')}
+                className={`px-3.5 py-1.5 rounded-full transition-all ${
+                  activePage === 'pengaturan_database' ? 'bg-amber-500 text-slate-950 shadow-sm font-extrabold' : 'text-amber-200 hover:text-white'
+                }`}
+              >
+                ⚙️ Master Setting (Admin)
+              </button>
+            )}
           </div>
         )}
 
@@ -86,17 +108,17 @@ export default function Header({ loggedInUser, activePage, onChangePage, onReset
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2 text-xs md:text-sm font-semibold text-white bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-400/20">
-                <span>{loggedInUser.username || 'P130100230'}</span>
+                <span className="max-w-[140px] truncate">{loggedInUser.username || 'P130100230'}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded font-black uppercase ${
-                  isAdmin ? 'bg-amber-400 text-amber-950' : 'bg-blue-300 text-blue-950'
+                  isAdmin ? 'bg-amber-400 text-amber-950' : (isGuru ? 'bg-blue-200 text-blue-950' : 'bg-emerald-300 text-emerald-950')
                 }`}>
-                  {isAdmin ? 'Proktor / Guru' : 'Siswa'}
+                  {roleLabel}
                 </span>
               </div>
               <button
                 onClick={onReset}
-                title="Keluar / Reset"
-                className="text-xs text-blue-200 hover:text-white p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                title="Keluar / Logout"
+                className="text-xs text-blue-200 hover:text-white p-1.5 hover:bg-white/10 rounded-full transition-colors flex items-center gap-1"
               >
                 <LogOut className="w-4 h-4" />
               </button>

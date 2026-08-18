@@ -1,10 +1,18 @@
-import React from 'react';
-import { BarChart2, User, Key, CheckCircle, ArrowLeft, CheckCircle2, XCircle, HelpCircle, Award } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart2, User, Key, CheckCircle, ArrowLeft, CheckCircle2, XCircle, HelpCircle, Award, ChevronDown, BookOpen, Lightbulb } from 'lucide-react';
 import MathText from './MathText';
 
 export default function ReviuHasilPage({ examData, answers, matrixAnswers, onFinishReview }) {
   const mapelTitle = examData?.title || 'Bahasa Inggris';
   const questions = examData?.questions || [];
+  const [expandedExplanations, setExpandedExplanations] = useState({});
+
+  const toggleExplanation = (qId) => {
+    setExpandedExplanations(prev => ({
+      ...prev,
+      [qId]: !prev[qId]
+    }));
+  };
 
   // Calculate results for all questions
   let correctCount = 0;
@@ -189,53 +197,98 @@ export default function ReviuHasilPage({ examData, answers, matrixAnswers, onFin
 
           {/* Table Rows */}
           <div className="divide-y divide-slate-200 bg-white">
-            {processedQuestions.map((item) => (
-              <div key={item.q.id} className="grid grid-cols-12 p-4 gap-3 items-stretch text-xs md:text-sm">
-                
-                {/* Column 1: NO */}
-                <div className="col-span-1 font-extrabold text-slate-800 text-center flex items-center justify-center text-sm">
-                  {item.idx + 1}
-                </div>
+            {processedQuestions.map((item) => {
+              const hasExplanation = item.q.explanation && item.q.explanation.trim().length > 0;
+              const isExpanded = expandedExplanations[item.q.id];
 
-                {/* Column 2: JAWABAN ANDA */}
-                <div className="col-span-5 flex items-center">
-                  <div className={`w-full p-4 rounded-xl font-medium min-h-[64px] flex items-center whitespace-pre-line leading-snug ${
-                    item.isKosong
-                      ? 'bg-[#f0f4f8] text-slate-500 italic border-l-4 border-l-slate-400'
-                      : item.isCorrect
-                      ? 'bg-emerald-50/70 text-emerald-950 border-l-4 border-l-emerald-600 font-semibold'
-                      : 'bg-rose-50/80 text-rose-900 border-l-4 border-l-red-500 font-semibold'
-                  }`}>
-                    <MathText text={item.userText} />
+              return (
+                <div key={item.q.id} className="divide-y divide-slate-100">
+                  <div className="grid grid-cols-12 p-4 gap-3 items-stretch text-xs md:text-sm">
+                    
+                    {/* Column 1: NO */}
+                    <div className="col-span-1 font-extrabold text-slate-800 text-center flex items-center justify-center text-sm">
+                      {item.idx + 1}
+                    </div>
+
+                    {/* Column 2: JAWABAN ANDA */}
+                    <div className="col-span-5 flex items-center">
+                      <div className={`w-full p-4 rounded-xl font-medium min-h-[64px] flex items-center whitespace-pre-line leading-snug ${
+                        item.isKosong
+                          ? 'bg-[#f0f4f8] text-slate-500 italic border-l-4 border-l-slate-400'
+                          : item.isCorrect
+                          ? 'bg-emerald-50/70 text-emerald-950 border-l-4 border-l-emerald-600 font-semibold'
+                          : 'bg-rose-50/80 text-rose-900 border-l-4 border-l-red-500 font-semibold'
+                      }`}>
+                        <MathText text={item.userText} />
+                      </div>
+                    </div>
+
+                    {/* Column 3: KUNCI JAWABAN */}
+                    <div className="col-span-4 flex items-center">
+                      <div className="w-full p-4 rounded-xl bg-emerald-50/80 text-emerald-950 border-l-4 border-l-emerald-600 font-semibold min-h-[64px] flex items-center whitespace-pre-line leading-snug">
+                        <MathText text={item.keyText} />
+                      </div>
+                    </div>
+
+                    {/* Column 4: STATUS (BENAR / SALAH / KOSONG) */}
+                    <div className="col-span-2 flex flex-col items-center justify-center gap-2">
+                      {item.isKosong ? (
+                        <span className="bg-slate-200 text-slate-700 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-slate-300">
+                          <HelpCircle className="w-3.5 h-3.5" /> KOSONG
+                        </span>
+                      ) : item.isCorrect ? (
+                        <span className="bg-emerald-100 text-emerald-800 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-emerald-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> BENAR
+                        </span>
+                      ) : (
+                        <span className="bg-rose-100 text-rose-800 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-rose-300">
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" /> SALAH
+                        </span>
+                      )}
+
+                      {/* TOGGLE PEMBAHASAN BUTTON IN STATUS COLUMN */}
+                      {hasExplanation && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExplanation(item.q.id)}
+                          className="text-[11px] font-extrabold text-[#0052cc] hover:text-[#003da6] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-2xs mt-1"
+                          title="Lihat / Sembunyikan Pembahasan Jawaban"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          <span>{isExpanded ? 'Tutup Bahas' : '💡 Pembahasan'}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+
                   </div>
-                </div>
 
-                {/* Column 3: KUNCI JAWABAN */}
-                <div className="col-span-4 flex items-center">
-                  <div className="w-full p-4 rounded-xl bg-emerald-50/80 text-emerald-950 border-l-4 border-l-emerald-600 font-semibold min-h-[64px] flex items-center whitespace-pre-line leading-snug">
-                    <MathText text={item.keyText} />
-                  </div>
-                </div>
+                  {/* EXPANDABLE PEMBAHASAN JAWABAN BOX */}
+                  {hasExplanation && isExpanded && (
+                    <div className="p-4 bg-amber-50/90 border-t border-amber-200 text-xs md:text-sm text-slate-800 space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="font-extrabold text-amber-950 flex items-center justify-between border-b border-amber-200/80 pb-1.5">
+                        <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                          <Lightbulb className="w-4 h-4 text-amber-600" />
+                          Pembahasan Jawaban Soal No. {item.idx + 1}
+                        </span>
 
-                {/* Column 4: STATUS (BENAR / SALAH / KOSONG) */}
-                <div className="col-span-2 flex items-center justify-center">
-                  {item.isKosong ? (
-                    <span className="bg-slate-200 text-slate-700 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-slate-300">
-                      <HelpCircle className="w-3.5 h-3.5" /> KOSONG
-                    </span>
-                  ) : item.isCorrect ? (
-                    <span className="bg-emerald-100 text-emerald-800 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-emerald-300">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> BENAR
-                    </span>
-                  ) : (
-                    <span className="bg-rose-100 text-rose-800 font-extrabold px-3 py-1.5 rounded-full text-xs flex items-center gap-1 border border-rose-300">
-                      <XCircle className="w-3.5 h-3.5 text-rose-600" /> SALAH
-                    </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleExplanation(item.q.id)}
+                          className="text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-amber-100 px-2 py-0.5 rounded-md"
+                        >
+                          ✕ Sembunyikan
+                        </button>
+                      </div>
+
+                      <div className="font-semibold text-slate-900 leading-relaxed bg-white p-3.5 rounded-xl border border-amber-200 shadow-2xs">
+                        <MathText text={item.q.explanation} />
+                      </div>
+                    </div>
                   )}
                 </div>
-
-              </div>
-            ))}
+              );
+            })}
           </div>
 
         </div>

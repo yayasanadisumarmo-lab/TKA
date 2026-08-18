@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GraduationCap, Layers, FileText, Search, ChevronDown, ChevronUp, Play, ShieldCheck } from 'lucide-react';
-import { JENJANG_OPTIONS, JENIS_MAPEL_OPTIONS, MAPEL_DATABASE } from '../data/subjects';
+import { JENJANG_OPTIONS, JENIS_MAPEL_OPTIONS, getMapelDatabase } from '../data/subjects';
 
 export default function SimulasiSelectionForm({ onStartSimulasi, onAdminLoginTrigger }) {
   const [selectedJenjang, setSelectedJenjang] = useState('sma');
@@ -15,13 +15,14 @@ export default function SimulasiSelectionForm({ onStartSimulasi, onAdminLoginTri
 
   const jenjangObj = JENJANG_OPTIONS.find(j => j.id === selectedJenjang) || JENJANG_OPTIONS[0];
 
-  // Get mapel list based on jenjang & jenis
+  // Get mapel list based on jenjang & jenis from dynamic database
   const getMapelList = () => {
+    const db = getMapelDatabase();
     if (jenjangObj.hasJenisMapel) {
       const key = `sma-${selectedJenis}`;
-      return MAPEL_DATABASE[key] || [];
+      return db[key] || [];
     }
-    return MAPEL_DATABASE[selectedJenjang] || [];
+    return db[selectedJenjang] || [];
   };
 
   const mapelList = getMapelList();

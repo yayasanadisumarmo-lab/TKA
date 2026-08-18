@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Plus, Trash2, Edit3, Eye, FileText, CheckCircle2, Layers, Search, Filter, Settings, CheckSquare, Lightbulb, FileSpreadsheet, Upload, Check, AlertTriangle, RefreshCw, PenTool, Target, Award } from 'lucide-react';
-import { MAPEL_DATABASE } from '../data/subjects';
+import { BookOpen, Plus, Trash2, Edit3, Eye, FileText, CheckCircle2, Layers, Search, Filter, Settings, CheckSquare, Lightbulb, FileSpreadsheet, Upload, Check, AlertTriangle, RefreshCw, PenTool, Target, Award, Shuffle, Dice5, X } from 'lucide-react';
+import { getMapelDatabase, saveMapelItem, deleteMapelItem } from '../data/subjects';
 import { getBankSoal, deleteQuestionFromMapel, deleteMultipleQuestionsFromMapel, clearBankSoalMapel } from '../data/bankSoalStorage';
 import { getExamSettingForMapel, saveExamSettingForMapel } from '../data/examSettingsStorage';
 import MathText from './MathText';
@@ -20,9 +20,55 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
   const [searchQuery, setSearchQuery] = useState('');
   const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [randomCount, setRandomCount] = useState(10);
 
   // Bulk Selection State (for Checkboxes)
   const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
+
+  // Quick Mapel Management State
+  const [mapelDb, setMapelDb] = useState(getMapelDatabase());
+  const [showQuickMapelModal, setShowQuickMapelModal] = useState(false);
+  const [editingQuickMapel, setEditingQuickMapel] = useState(null);
+  const [quickMapelForm, setQuickMapelForm] = useState({ id: '', label: '' });
+
+  const refreshMapelDb = () => {
+    setMapelDb(getMapelDatabase());
+  };
+
+  // Quick Mapel Handlers
+  const handleOpenAddQuickMapel = () => {
+    setEditingQuickMapel(null);
+    setQuickMapelForm({ id: '', label: '' });
+    setShowQuickMapelModal(true);
+  };
+
+  const handleOpenEditQuickMapel = (item) => {
+    setEditingQuickMapel(item);
+    setQuickMapelForm({ id: item.id, label: item.label });
+    setShowQuickMapelModal(true);
+  };
+
+  const handleSaveQuickMapel = (e) => {
+    e.preventDefault();
+    if (!quickMapelForm.label.trim()) {
+      alert('Nama Mata Pelajaran tidak boleh kosong!');
+      return;
+    }
+    saveMapelItem(selectedKategori, {
+      id: quickMapelForm.id,
+      label: quickMapelForm.label
+    });
+    refreshMapelDb();
+    setShowQuickMapelModal(false);
+  };
+
+  const handleDeleteQuickMapel = (mapelId, label, e) => {
+    e.stopPropagation();
+    if (window.confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${label}" dari kategori ini?`)) {
+      deleteMapelItem(selectedKategori, mapelId);
+      refreshMapelDb();
+    }
+  };
 
   // Load bank soal and active exam settings
   const loadBankData = () => {
@@ -43,22 +89,32 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
     loadExamSettings(selectedMapelId);
   }, [selectedMapelId]);
 
-  const currentMapelList = MAPEL_DATABASE[selectedKategori] || [];
+  const currentMapelList = mapelDb[selectedKategori] || [];
   const currentMapelObj = currentMapelList.find(m => m.id === selectedMapelId) || currentMapelList[0] || { id: 'b-ing', label: 'Bahasa Inggris' };
   const mapelQuestions = bankData[currentMapelObj.id]?.questions || [];
 
   // Active question IDs selected for test in examSettingsStorage
   const examSelectedIds = examSettings?.selectedQuestionIds || [];
 
+  // Pagination State (15 questions per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const QUESTIONS_PER_PAGE = 15;
+
   const filteredQuestions = mapelQuestions.filter(q => 
     q.questionText?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     q.stimulus?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Reset selection when changing mapel
+  // Reset selection & page when changing mapel or search query or category
   useEffect(() => {
     setSelectedQuestionIds([]);
-  }, [selectedMapelId]);
+    setCurrentPage(1);
+  }, [selectedMapelId, searchQuery, selectedKategori]);
+
+  const totalPages = Math.ceil(filteredQuestions.length / QUESTIONS_PER_PAGE) || 1;
+  const startIndex = (currentPage - 1) * QUESTIONS_PER_PAGE;
+  const endIndex = startIndex + QUESTIONS_PER_PAGE;
+  const paginatedQuestions = filteredQuestions.slice(startIndex, endIndex);
 
   // Handlers for switching to editor mode
   const handleOpenAddQuestion = () => {
@@ -109,7 +165,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
     });
 
     loadExamSettings(currentMapelObj.id);
-    alert(`🎯 Berhasil! ${selectedQuestionIds.length} soal terpilih telah ditetapkan sebagai Soal Ujian Aktif untuk "${currentMapelObj.label}".`);
+    alert(`Berhasil! ${selectedQuestionIds.length} soal terpilih telah ditetapkan sebagai Soal Ujian Aktif untuk "${currentMapelObj.label}".`);
   };
 
   const handleToggleSingleQuestionForExam = (qId) => {
@@ -126,6 +182,41 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
       jumlahSoal: updatedIds.length > 0 ? updatedIds.length : mapelQuestions.length
     });
 
+    loadExamSettings(currentMapelObj.id);
+  };
+
+  // RANDOM QUESTION SELECTION HANDLER
+  const handleRandomSelect = () => {
+    if (mapelQuestions.length === 0) {
+      alert('Tidak ada soal tersedia untuk diacak.');
+      return;
+    }
+    const count = Math.min(Math.max(1, randomCount), mapelQuestions.length);
+    // Fisher-Yates shuffle then pick first N
+    const shuffled = [...mapelQuestions].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, count);
+    const pickedIds = picked.map(q => q.id);
+
+    setSelectedQuestionIds(pickedIds);
+
+    saveExamSettingForMapel(currentMapelObj.id, {
+      selectedQuestionIds: pickedIds,
+      metodeSoal: 'acak',
+      jumlahSoal: count
+    });
+
+    loadExamSettings(currentMapelObj.id);
+    alert(`Berhasil memilih ${count} soal secara ACAK dari ${mapelQuestions.length} soal tersedia untuk "${currentMapelObj.label}".`);
+  };
+
+  // RESET / CANCEL RANDOM SELECTION
+  const handleResetRandomSelect = () => {
+    setSelectedQuestionIds([]);
+    saveExamSettingForMapel(currentMapelObj.id, {
+      selectedQuestionIds: [],
+      metodeSoal: 'acak',
+      jumlahSoal: mapelQuestions.length
+    });
     loadExamSettings(currentMapelObj.id);
   };
 
@@ -152,7 +243,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
 
   const handleClearAllQuestions = () => {
     if (mapelQuestions.length === 0) return;
-    if (window.confirm(`⚠️ PERINGATAN: Apakah Anda yakin ingin MENGOSONGKAN SELURUH ${mapelQuestions.length} SOAL di "${currentMapelObj.label}"?`)) {
+    if (window.confirm(`PERINGATAN: Apakah Anda yakin ingin MENGOSONGKAN SELURUH ${mapelQuestions.length} SOAL di "${currentMapelObj.label}"?`)) {
       clearBankSoalMapel(currentMapelObj.id);
       setSelectedQuestionIds([]);
       loadBankData();
@@ -167,8 +258,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
       {/* Top Banner Title & Unified Sub-Tab Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <BookOpen className="w-7 h-7 text-amber-300" />
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
             Pusat Bank Soal & Pembuatan Soal
           </h1>
           <p className="text-xs md:text-sm text-blue-100/90 font-medium mt-1">
@@ -181,24 +271,21 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
             onClick={() => setShowTutorialModal(true)}
             className="bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold py-2.5 px-4 rounded-xl shadow-lg transition-all text-xs md:text-sm flex items-center justify-center gap-2"
           >
-            <BookOpen className="w-4 h-4" />
-            📖 Tutorial Rumus
+            Tutorial Rumus
           </button>
 
           <button
             onClick={() => setShowImportModal(true)}
             className="bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition-all text-xs md:text-sm flex items-center justify-center gap-2"
           >
-            <Upload className="w-4 h-4" />
-            📥 Impor Soal Word (.docx)
+            Impor Soal Text (.txt)
           </button>
 
           <button
             onClick={() => onGoToSchedule && onGoToSchedule(currentMapelObj)}
             className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition-all text-xs md:text-sm flex items-center justify-center gap-2"
           >
-            <CheckSquare className="w-4 h-4" />
-            🎯 Atur Jadwal & Waktu Ujian
+            Atur Jadwal & Waktu Ujian
           </button>
         </div>
       </div>
@@ -213,7 +300,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
               : 'text-blue-100 hover:text-white hover:bg-white/10'
           }`}
         >
-          <BookOpen className="w-4 h-4" /> 📋 Daftar Soal Tersimpan ({mapelQuestions.length})
+          Daftar Soal Tersimpan ({mapelQuestions.length})
         </button>
 
         <button
@@ -224,8 +311,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
               : 'text-blue-100 hover:text-white hover:bg-white/10'
           }`}
         >
-          <PenTool className="w-4 h-4 text-amber-400" />
-          {editingQuestion ? '✏️ Edit Soal' : '+ Buat Soal Manual'}
+          {editingQuestion ? 'Edit Soal' : '+ Buat Soal Manual'}
         </button>
       </div>
 
@@ -236,10 +322,19 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
           {/* Left Column: Filter Mapel Selector Card */}
           <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-xl border border-slate-100 space-y-4">
             
-            <h3 className="font-bold text-slate-800 text-base border-b pb-3 flex items-center gap-2">
-              <Filter className="w-4 h-4 text-[#007bff]" />
-              Pilih Mata Pelajaran
-            </h3>
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-slate-800 text-base">
+                Pilih Mata Pelajaran
+              </h3>
+              <button
+                type="button"
+                onClick={handleOpenAddQuickMapel}
+                className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-black py-1 px-3 rounded-lg shadow-xs transition-all flex items-center gap-1"
+                title="Tambah Mata Pelajaran Baru ke Kategori Ini"
+              >
+                <Plus className="w-3.5 h-3.5" /> + Tambah Mapel
+              </button>
+            </div>
 
             {/* Kategori Selector */}
             <div>
@@ -248,7 +343,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                 value={selectedKategori}
                 onChange={(e) => {
                   setSelectedKategori(e.target.value);
-                  const newList = MAPEL_DATABASE[e.target.value] || [];
+                  const newList = mapelDb[e.target.value] || [];
                   if (newList.length > 0) setSelectedMapelId(newList[0].id);
                 }}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 font-semibold outline-none focus:border-[#007bff] cursor-pointer"
@@ -262,9 +357,12 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
 
             {/* Mapel Items List Box */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                Daftar Mapel ({currentMapelList.length} Mata Pelajaran)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-500">
+                  Daftar Mapel ({currentMapelList.length} Mata Pelajaran)
+                </label>
+              </div>
+
               <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/50 p-1">
                 {currentMapelList.map(item => {
                   const count = bankData[item.id]?.questions?.length || 0;
@@ -273,21 +371,55 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                     <div
                       key={item.id}
                       onClick={() => setSelectedMapelId(item.id)}
-                      className={`p-3 rounded-lg text-xs md:text-sm font-semibold cursor-pointer transition-all flex items-center justify-between ${
+                      className={`p-3 rounded-lg text-xs md:text-sm font-semibold cursor-pointer transition-all flex items-center justify-between group ${
                         isSelected
                           ? 'bg-[#007bff] text-white shadow-md'
                           : 'hover:bg-white text-slate-700'
                       }`}
                     >
-                      <span>{item.label}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-                      }`}>
-                        {count} Soal
-                      </span>
+                      <span className="truncate pr-2">{item.label}</span>
+                      
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Quick Edit Icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleOpenEditQuickMapel(item); }}
+                          className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                            isSelected ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-[#007bff] hover:bg-slate-100'
+                          }`}
+                          title="Edit nama mapel ini"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Quick Delete Icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteQuickMapel(item.id, item.label, e)}
+                          className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                            isSelected ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                          }`}
+                          title="Hapus mapel ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Count Badge */}
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {count} Soal
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
+
+                {currentMapelList.length === 0 && (
+                  <div className="p-4 text-center text-xs text-slate-400 italic">
+                    Belum ada mata pelajaran. Klik "+ Tambah Mapel" di atas.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -308,8 +440,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-300 flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-emerald-700" />
+                <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-300">
                   Soal Ujian Terpilih: <strong>{examSelectedIds.length > 0 ? examSelectedIds.length : mapelQuestions.length} Soal</strong>
                 </span>
 
@@ -317,7 +448,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                   onClick={handleOpenAddQuestion}
                   className="bg-[#007bff] hover:bg-[#0069d9] text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
                 >
-                  <Plus className="w-4 h-4" /> + Tambah Soal Manual
+                  + Tambah Soal Manual
                 </button>
               </div>
             </div>
@@ -326,14 +457,66 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
             {mapelQuestions.length > 0 && (
               <div className="space-y-3 mb-5">
                 <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari teks soal atau kata kunci..."
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm text-slate-700 outline-none focus:border-[#007bff]"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm text-slate-700 outline-none focus:border-[#007bff]"
                   />
+                </div>
+
+                {/* RANDOM QUESTION PICKER CARD */}
+                <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">Pilih Soal Acak</h4>
+                    <p className="text-[11px] text-slate-500 font-medium">Sistem akan memilih soal secara acak dari {mapelQuestions.length} soal tersedia</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setRandomCount(prev => Math.max(1, prev - 1))}
+                        className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 font-bold text-sm transition-colors"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={mapelQuestions.length}
+                        value={randomCount}
+                        onChange={(e) => setRandomCount(Math.max(1, Math.min(mapelQuestions.length, parseInt(e.target.value) || 1)))}
+                        className="w-14 text-center text-sm font-extrabold text-indigo-900 outline-none border-x border-indigo-200 py-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRandomCount(prev => Math.min(mapelQuestions.length, prev + 1))}
+                        className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 font-bold text-sm transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="text-xs text-slate-500 font-semibold">soal</span>
+
+                    <button
+                      onClick={handleRandomSelect}
+                      disabled={mapelQuestions.length === 0}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-[0.99]"
+                    >
+                      Acak Sekarang
+                    </button>
+
+                    {examSelectedIds.length > 0 && (
+                      <button
+                        onClick={handleResetRandomSelect}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all flex items-center gap-1.5 active:scale-[0.99]"
+                      >
+                        Reset Pilihan
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* BATCH OPERATION ACTION BAR */}
@@ -355,8 +538,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                         onClick={handleSetSelectedAsExamQuestions}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-1.5 rounded-lg text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-[0.99]"
                       >
-                        <Target className="w-4 h-4" />
-                        🎯 Gunakan ({selectedQuestionIds.length}) Soal Terpilih untuk Ujian
+                        Gunakan ({selectedQuestionIds.length}) Soal Terpilih untuk Ujian
                       </button>
                     )}
 
@@ -365,7 +547,6 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                         onClick={handleDeleteSelectedBatch}
                         className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-sm flex items-center gap-1.5"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
                         Hapus Terpilih ({selectedQuestionIds.length})
                       </button>
                     )}
@@ -375,24 +556,22 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                       className="bg-slate-200 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5"
                       title="Kosongkan seluruh soal pada mapel ini"
                     >
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                       Kosongkan Mapel Ini
                     </button>
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* Question List */}
+            )}            {/* Question List */}
             {filteredQuestions.length > 0 ? (
               <div className="space-y-4">
-                {filteredQuestions.map((q, idx) => {
+                {paginatedQuestions.map((q, idx) => {
+                  const realIndex = startIndex + idx;
                   const isChecked = selectedQuestionIds.includes(q.id);
                   const isExamSelected = examSelectedIds.includes(q.id) || (examSelectedIds.length === 0);
 
                   return (
                     <div
-                      key={q.id || idx}
+                      key={q.id || realIndex}
                       className={`p-4 md:p-5 rounded-2xl border-2 transition-all ${
                         isChecked
                           ? 'border-[#007bff] bg-blue-50/30 shadow-md'
@@ -412,21 +591,20 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                           />
 
                           <span className="bg-[#007bff] text-white text-xs font-bold px-2.5 py-0.5 rounded-lg">
-                            Soal No. {idx + 1}
+                            Soal No. {realIndex + 1}
                           </span>
 
                           {/* EXAM SELECTION BADGE / INDICATOR */}
                           <button
                             onClick={() => handleToggleSingleQuestionForExam(q.id)}
-                            className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                            className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold transition-all cursor-pointer ${
                               isExamSelected
                                 ? 'bg-emerald-600 text-white shadow-xs hover:bg-emerald-700'
                                 : 'bg-slate-200 text-slate-600 hover:bg-emerald-100 hover:text-emerald-800'
                             }`}
                             title="Klik untuk memilih/membatalkan soal ini sebagai Soal Ujian"
                           >
-                            <Target className="w-3.5 h-3.5" />
-                            <span>{isExamSelected ? '✅ Soal Ujian Terpilih' : '⚪ Pilih untuk Ujian'}</span>
+                            <span>{isExamSelected ? 'Soal Ujian Terpilih' : 'Pilih untuk Ujian'}</span>
                           </button>
 
                           <span className="text-xs text-slate-400 font-medium hidden sm:inline">
@@ -438,10 +616,10 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                           {/* Edit Question Button */}
                           <button
                             onClick={() => handleOpenEditQuestion(q)}
-                            className="bg-blue-50 hover:bg-blue-100 text-[#007bff] font-bold px-3 py-1 rounded-lg text-xs flex items-center gap-1 border border-blue-200 transition-colors"
+                            className="bg-blue-50 hover:bg-blue-100 text-[#007bff] font-bold px-3 py-1 rounded-lg text-xs border border-blue-200 transition-colors"
                             title="Edit Soal Ini"
                           >
-                            <Edit3 className="w-3.5 h-3.5" /> Edit Soal
+                            Edit Soal
                           </button>
 
                           {/* Delete Question Button */}
@@ -450,67 +628,159 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
                             className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
                             title="Hapus Soal"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Hapus
                           </button>
                         </div>
                       </div>
 
                       {/* Stimulus / Question Preview */}
-                      <div className="text-xs md:text-sm font-semibold text-slate-800 mb-3 line-clamp-3">
+                      <div className="text-xs md:text-sm font-semibold text-slate-800 mb-2 leading-relaxed">
                         <MathText text={q.questionText || q.stimulus} />
                       </div>
+
+                      {/* Stimulus Image if attached */}
+                      {(q.stimulusImage || q.image) && (
+                        <div className="my-3">
+                          <img
+                            src={q.stimulusImage || q.image}
+                            alt={`Gambar Soal No. ${realIndex + 1}`}
+                            className="max-h-56 md:max-h-72 rounded-xl object-contain bg-slate-50 border border-slate-200 p-1.5 shadow-xs"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              const parent = e.target.parentElement;
+                              if (parent && !parent.querySelector('.image-error-msg')) {
+                                const errBox = document.createElement('div');
+                                errBox.className = 'image-error-msg p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-900 flex items-center justify-between';
+                                errBox.innerHTML = '<span>⚠️ Gambar soal sementara (blob) telah kadaluarsa karena halaman diperbarui. Klik <b>"Edit Soal"</b> untuk mengunggah gambar permanen.</span>';
+                                parent.appendChild(errBox);
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
 
                       {/* Options / Answer Summary */}
                       {q.type === 'single' && q.options && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                          {q.options.map(opt => (
-                            <div
-                              key={opt.key}
-                              className={`p-2 rounded-lg border ${
-                                opt.key === q.correctAnswer || opt.isCorrect
-                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
-                                  : 'bg-white border-slate-200 text-slate-600'
-                              }`}
-                            >
-                              <span>{opt.key}. <MathText text={opt.text ? opt.text.split('\n')[0] : '(Opsi Gambar)'} /></span>
-                              {(opt.key === q.correctAnswer || opt.isCorrect) && (
-                                <span className="ml-1 text-[10px] text-emerald-700">✓ (Kunci)</span>
-                              )}
-                            </div>
-                          ))}
+                          {q.options
+                            .filter(opt => (opt.text && opt.text.trim().length > 0) || opt.image)
+                            .map((opt, optIdx) => (
+                              <div
+                                key={opt.key || optIdx}
+                                className={`p-2 rounded-lg border ${
+                                  opt.key === q.correctAnswer || opt.isCorrect
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                    : 'bg-white border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                <span>{opt.key}. <MathText text={opt.text ? opt.text.split('\n')[0] : '(Opsi Gambar)'} /></span>
+                                {(opt.key === q.correctAnswer || opt.isCorrect) && (
+                                  <span className="ml-1 text-[10px] text-emerald-700">(Kunci)</span>
+                                )}
+                              </div>
+                            ))}
                         </div>
                       )}
 
                       {q.type === 'matrix' && (
-                        <div className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs text-slate-600">
-                          📊 Tipe Soal Matriks/Tabel ({q.matrixRows?.length || 0} Baris Soal)
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2 overflow-x-auto">
+                          <div className="flex items-center justify-between font-bold text-slate-800 border-b pb-1.5">
+                            <span>Tipe Matriks / Tabel ({q.matrixRows?.length || 0} Baris Soal)</span>
+                            {q.matrixHeaders && (
+                              <span className="text-[11px] font-mono text-[#007bff] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                {q.matrixHeaders[0] || 'Soal'} | {q.matrixHeaders[1] || 'Kategori 1'} | {q.matrixHeaders[2] || 'Kategori 2'}
+                              </span>
+                            )}
+                          </div>
+                          {q.matrixRows && q.matrixRows.length > 0 && (
+                            <div className="space-y-1.5 pt-1">
+                              {q.matrixRows.map((r, rIdx) => (
+                                <div key={r.id || rIdx} className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-[11px]">
+                                  <span className="font-semibold text-slate-800 flex-1 truncate">{rIdx + 1}. <MathText text={r.text} /></span>
+                                  <span className="font-extrabold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-md whitespace-nowrap flex-shrink-0">
+                                    Kunci: {r.correct}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
+
+                {/* PAGINATION CONTROLS (10 items per page) */}
+                {filteredQuestions.length > QUESTIONS_PER_PAGE && (
+                  <div className="mt-6 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-xs text-slate-600 font-semibold">
+                      Menampilkan <span className="font-bold text-slate-900">{startIndex + 1} - {Math.min(endIndex, filteredQuestions.length)}</span> dari <span className="font-bold text-slate-900">{filteredQuestions.length}</span> Soal (Halaman {currentPage} dari {totalPages})
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentPage(prev => Math.max(prev - 1, 1));
+                          window.scrollTo({ top: 300, behavior: 'smooth' });
+                        }}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        ‹ Prev
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => {
+                            setCurrentPage(page);
+                            window.scrollTo({ top: 300, behavior: 'smooth' });
+                          }}
+                          className={`w-8 h-8 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-[#007bff] text-white shadow-md scale-105'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-blue-50 hover:text-[#007bff]'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentPage(prev => Math.min(prev + 1, totalPages));
+                          window.scrollTo({ top: 300, behavior: 'smooth' });
+                        }}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        Next ›
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-16 text-center bg-slate-50/70 rounded-2xl border-2 border-dashed border-slate-200">
-                <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h4 className="font-bold text-slate-700 text-base">Belum Ada Soal Tersimpan untuk {currentMapelObj.label}</h4>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  Klik tombol di bawah untuk membuat atau mengimpor soal dari Word (.docx).
+                  Klik tombol di bawah untuk membuat atau mengimpor soal dari file teks (.txt).
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-3">
                   <button
                     onClick={() => setShowImportModal(true)}
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md transition-all inline-flex items-center gap-1.5"
                   >
-                    <Upload className="w-4 h-4" />
-                    Impor Dari File Word (.docx)
+                    Impor Dari File Teks (.txt)
                   </button>
 
                   <button
                     onClick={handleOpenAddQuestion}
                     className="bg-[#007bff] hover:bg-[#0069d9] text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md transition-all inline-flex items-center gap-1.5"
                   >
-                    <Plus className="w-4 h-4" />
                     Buat Soal Manual
                   </button>
                 </div>
@@ -525,7 +795,7 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
       {/* VIEW MODE 2: FORM BUAT & EDIT SOAL MANUAL */}
       {subTab === 'editor' && (
         <TambahSoalPage
-          initialMapel={{ ...currentMapelObj, editingQuestion }}
+          initialMapel={{ ...currentMapelObj, categoryKey: selectedKategori, editingQuestion }}
           onCancel={handleCancelEditor}
           onSaveSuccess={handleSaveEditorSuccess}
         />
@@ -544,6 +814,75 @@ export default function BankSoalPage({ onGoToSchedule, initialQuestionToEdit = n
         selectedMapelObj={currentMapelObj}
         onImportSuccess={loadBankData}
       />
+
+      {/* QUICK MAPEL ADD & EDIT MODAL */}
+      {showQuickMapelModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in fade-in zoom-in-95 duration-150 my-8">
+            <div className="flex items-center justify-between border-b pb-3 mb-4">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-600" />
+                {editingQuickMapel ? 'Edit Nama Mata Pelajaran' : 'Tambah Mata Pelajaran Baru'}
+              </h3>
+              <button onClick={() => setShowQuickMapelModal(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickMapel} className="space-y-4 text-xs">
+              
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kategori Jenis Mapel</label>
+                <div className="p-2.5 bg-slate-100 rounded-xl text-xs font-bold text-slate-800 border border-slate-200">
+                  {selectedKategori === 'sma-wajib' ? 'SMA/SMK - Mata Pelajaran Wajib' :
+                   selectedKategori === 'sma-pilihan' ? 'SMA/SMK - Mata Pelajaran Pilihan' :
+                   selectedKategori === 'smp' ? 'SMP / MTs Sederajat' : 'SD / MI Sederajat'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kode / ID Mapel (Slug)</label>
+                <input
+                  type="text"
+                  value={quickMapelForm.id}
+                  onChange={(e) => setQuickMapelForm({ ...quickMapelForm, id: e.target.value })}
+                  placeholder="Contoh: pkk / dkv / fisika"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-amber-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Kosongkan untuk membuat kode ID otomatis dari nama mapel.</p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Mata Pelajaran *</label>
+                <input
+                  type="text"
+                  required
+                  value={quickMapelForm.label}
+                  onChange={(e) => setQuickMapelForm({ ...quickMapelForm, label: e.target.value })}
+                  placeholder="Contoh: Projek Kreatif dan Kewirausahaan (PKK)"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickMapelModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs shadow-md"
+                >
+                  Simpan Mata Pelajaran
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

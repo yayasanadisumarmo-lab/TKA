@@ -10,9 +10,11 @@ import BankSoalPage from './components/BankSoalPage';
 import LiveMonitoringPage from './components/LiveMonitoringPage';
 import PengaturanJadwalPage from './components/PengaturanJadwalPage';
 import TambahPesertaPage from './components/TambahPesertaPage';
+import PengaturanDatabasePage from './components/PengaturanDatabasePage';
+import LaporanHasilPage from './components/LaporanHasilPage';
 
 export default function App() {
-  // Main view mode: 'simulasi' | 'bank_soal' | 'live_monitoring' | 'pengaturan_jadwal' | 'tambah_peserta'
+  // Main view mode: 'simulasi' | 'bank_soal' | 'live_monitoring' | 'pengaturan_jadwal' | 'pengaturan_database' | 'tambah_peserta'
   const [activeTab, setActiveTab] = useState('simulasi');
 
   // Sub-step inside 'simulasi': 'select' | 'login' | 'admin_login' | 'confirm' | 'confirm_tes' | 'exam' | 'review'
@@ -31,8 +33,8 @@ export default function App() {
 
   const handleLoginSuccess = (userAuth) => {
     setLoginUser(userAuth);
-    if (userAuth.role === 'admin') {
-      setActiveTab('live_monitoring');
+    if (userAuth.role === 'admin' || userAuth.role === 'guru') {
+      setActiveTab('bank_soal');
     } else {
       setStep('confirm'); // Move from Login Siswa -> Konfirmasi Data Peserta
     }
@@ -71,6 +73,8 @@ export default function App() {
     setActiveTab('pengaturan_jadwal');
   };
 
+  const isStaff = loginUser?.role === 'admin' || loginUser?.role === 'guru';
+
   if ((step === 'login' || step === 'admin_login') && activeTab === 'simulasi') {
     return (
       <LoginPage
@@ -99,7 +103,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col justify-start items-center py-4">
         
-        {/* TAB 1: SIMULASI UJIAN (SISWA) */}
+        {/* TAB 1: SIMULASI UJIAN (SISWA & GURU) */}
         {activeTab === 'simulasi' && (
           <>
             {step === 'select' && (
@@ -146,27 +150,37 @@ export default function App() {
           </>
         )}
 
-        {/* TAB 2: BANK & KELOLA SOAL (PROKTOR/GURU) */}
-        {(activeTab === 'bank_soal' || activeTab === 'tambah_soal') && loginUser?.role === 'admin' && (
+        {/* TAB 2: BANK & KELOLA SOAL (PROKTOR & GURU) */}
+        {(activeTab === 'bank_soal' || activeTab === 'tambah_soal') && isStaff && (
           <BankSoalPage
             onGoToSchedule={handleGoToScheduleFromBank}
           />
         )}
 
-        {/* TAB 3: LIVE MONITORING & PROGRESS PESERTA (PROKTOR/GURU) */}
-        {activeTab === 'live_monitoring' && loginUser?.role === 'admin' && (
+        {/* TAB 3: LIVE MONITORING & PROGRESS PESERTA (PROKTOR & GURU) */}
+        {activeTab === 'live_monitoring' && isStaff && (
           <LiveMonitoringPage />
         )}
 
-        {/* TAB 4: PENGATURAN JADWAL & SESI UJIAN (PROKTOR/GURU) */}
-        {activeTab === 'pengaturan_jadwal' && loginUser?.role === 'admin' && (
+        {/* TAB 4: PENGATURAN JADWAL & SESI UJIAN (PROKTOR & GURU) */}
+        {activeTab === 'pengaturan_jadwal' && isStaff && (
           <PengaturanJadwalPage
             initialMapel={activeMapelForSchedule}
             onSaveSuccess={() => setActiveTab('bank_soal')}
           />
         )}
 
-        {/* TAB 5: TAMBAH PESERTA BARU (PROKTOR/GURU) */}
+        {/* TAB 7: LAPORAN HASIL UJIAN & NILAI PESERTA (PROKTOR & GURU) */}
+        {activeTab === 'laporan_hasil' && isStaff && (
+          <LaporanHasilPage />
+        )}
+
+        {/* TAB 5: MENU SETTING MASTER DATA (HANYA SUPER ADMIN BISA KEMANA-MANA) */}
+        {activeTab === 'pengaturan_database' && loginUser?.role === 'admin' && (
+          <PengaturanDatabasePage />
+        )}
+
+        {/* TAB 6: TAMBAH PESERTA BARU (SUPER ADMIN & PROKTOR) */}
         {activeTab === 'tambah_peserta' && loginUser?.role === 'admin' && (
           <TambahPesertaPage
             onCancel={() => setActiveTab('simulasi')}
@@ -185,7 +199,7 @@ export default function App() {
               onClick={handleTriggerAdminLogin}
               className="text-blue-200 hover:text-white underline font-semibold flex items-center gap-1"
             >
-              🔒 Login Proktor / Guru
+              🔒 Login Guru / Proktor / Admin
             </button>
             <span>•</span>
             <span className="hover:underline cursor-pointer">Panduan Aplikasi</span>

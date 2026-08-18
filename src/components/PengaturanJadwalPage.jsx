@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Calendar, Shuffle, CheckSquare, Save, Filter, BookOpen, AlertCircle } from 'lucide-react';
-import { MAPEL_DATABASE } from '../data/subjects';
+import { Settings, Clock, Calendar, Shuffle, CheckSquare, Save, Filter, BookOpen, AlertCircle, Users, CheckCircle2, UserCheck, GraduationCap, Search, Check, Plus, Trash2, Edit3, X } from 'lucide-react';
+import { getMapelDatabase, saveMapelItem, deleteMapelItem } from '../data/subjects';
 import { getBankSoal } from '../data/bankSoalStorage';
 import { getExamSettingForMapel, saveExamSettingForMapel } from '../data/examSettingsStorage';
+import { getSiswaData, parseTingkat } from '../data/siswaDatabase';
 
 // Helper to auto-calculate end time (HH:MM) from start time + duration (minutes)
 const calculateEndTime = (startStr, durationMinutes) => {
@@ -31,7 +32,57 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
   const [metodeSoal, setMetodeSoal] = useState('acak'); // 'acak' | 'manual'
   const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
 
+  // Student Selection States (Only applies to Siswa)
+  const [allSiswaList, setAllSiswaList] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [filterStudentTingkat, setFilterStudentTingkat] = useState('all'); // 'all' | 'X' | 'XI' | 'XII'
+  const [filterStudentJurusan, setFilterStudentJurusan] = useState('all'); // 'all' | 'TKR' | 'TKJ' | 'TAV'
+  const [filterStudentKelas, setFilterStudentKelas] = useState('all');
+  const [filterStudentSearch, setFilterStudentSearch] = useState('');
+
   const [bankData, setBankData] = useState({});
+  const [mapelDb, setMapelDb] = useState(getMapelDatabase());
+  const [showQuickMapelModal, setShowQuickMapelModal] = useState(false);
+  const [editingQuickMapel, setEditingQuickMapel] = useState(null);
+  const [quickMapelForm, setQuickMapelForm] = useState({ id: '', label: '' });
+
+  const refreshMapelDb = () => {
+    setMapelDb(getMapelDatabase());
+  };
+
+  const handleOpenAddQuickMapel = () => {
+    setEditingQuickMapel(null);
+    setQuickMapelForm({ id: '', label: '' });
+    setShowQuickMapelModal(true);
+  };
+
+  const handleOpenEditQuickMapel = (item) => {
+    setEditingQuickMapel(item);
+    setQuickMapelForm({ id: item.id, label: item.label });
+    setShowQuickMapelModal(true);
+  };
+
+  const handleSaveQuickMapel = (e) => {
+    e.preventDefault();
+    if (!quickMapelForm.label.trim()) {
+      alert('Nama Mata Pelajaran tidak boleh kosong!');
+      return;
+    }
+    saveMapelItem(selectedKategori, {
+      id: quickMapelForm.id,
+      label: quickMapelForm.label
+    });
+    refreshMapelDb();
+    setShowQuickMapelModal(false);
+  };
+
+  const handleDeleteQuickMapel = (mapelId, label, e) => {
+    e.stopPropagation();
+    if (window.confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${label}" dari kategori ini?`)) {
+      deleteMapelItem(selectedKategori, mapelId);
+      refreshMapelDb();
+    }
+  };
 
   useEffect(() => {
     if (initialMapel?.id) {
@@ -40,13 +91,16 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
   }, [initialMapel]);
 
   // Current selected subject list & object
-  const currentMapelList = MAPEL_DATABASE[selectedKategori] || [];
+  const currentMapelList = mapelDb[selectedKategori] || [];
   const currentMapelObj = currentMapelList.find(m => m.id === selectedMapelId) || currentMapelList[0] || { id: 'b-ing', label: 'Bahasa Inggris' };
 
-  // Load bank soal and saved settings when mapel changes
+  // Load bank soal, student database, and saved settings when mapel changes
   useEffect(() => {
     const bData = getBankSoal();
     setBankData(bData);
+
+    const sList = getSiswaData();
+    setAllSiswaList(sList);
 
     const savedSetting = getExamSettingForMapel(selectedMapelId);
     const dur = savedSetting.durasiMenit || 75;
@@ -59,6 +113,13 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
     setJumlahSoal(savedSetting.jumlahSoal || 20);
     setMetodeSoal(savedSetting.metodeSoal || 'acak');
     setSelectedQuestionIds(savedSetting.selectedQuestionIds || []);
+    
+    // Default to all student IDs if no setting saved yet, or load saved student IDs
+    if (savedSetting.selectedStudentIds && Array.isArray(savedSetting.selectedStudentIds)) {
+      setSelectedStudentIds(savedSetting.selectedStudentIds);
+    } else {
+      setSelectedStudentIds(sList.map(s => s.id));
+    }
   }, [selectedMapelId]);
 
   const mapelQuestions = bankData[currentMapelObj.id]?.questions || [];
@@ -91,6 +152,52 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
     setSelectedQuestionIds([]);
   };
 
+  // Student Selection Handlers
+  const filteredSiswaForSelection = allSiswaList.filter(s => {
+    const sTingkat = parseTingkat(s.kelas);
+    const matchTingkat = filterStudentTingkat === 'all' || sTingkat === filterStudentTingkat;
+
+    let matchJurusan = true;
+    if (filterStudentJurusan !== 'all') {
+      const jur = (s.jurusan || '').toLowerCase();
+      const kls = (s.kelas || '').toLowerCase();
+      const targetJ = filterStudentJurusan.toLowerCase();
+      matchJurusan = jur.includes(targetJ) || kls.includes(targetJ);
+    }
+
+    const matchKelas = filterStudentKelas === 'all' || s.kelas === filterStudentKelas;
+
+    const query = filterStudentSearch.toLowerCase();
+    const matchSearch = !query || 
+      (s.nama && s.nama.toLowerCase().includes(query)) ||
+      (s.nisn && s.nisn.toLowerCase().includes(query)) ||
+      (s.nik && s.nik.toLowerCase().includes(query)) ||
+      (s.kelas && s.kelas.toLowerCase().includes(query));
+
+    return matchTingkat && matchJurusan && matchKelas && matchSearch;
+  });
+
+  const handleToggleStudentSelect = (sId) => {
+    if (selectedStudentIds.includes(sId)) {
+      setSelectedStudentIds(prev => prev.filter(id => id !== sId));
+    } else {
+      setSelectedStudentIds(prev => [...prev, sId]);
+    }
+  };
+
+  const handleSelectAllFilteredStudents = () => {
+    const filteredIds = filteredSiswaForSelection.map(s => s.id);
+    setSelectedStudentIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+  };
+
+  const handleDeselectAllFilteredStudents = () => {
+    const filteredIds = new Set(filteredSiswaForSelection.map(s => s.id));
+    setSelectedStudentIds(prev => prev.filter(id => !filteredIds.has(id)));
+  };
+
+  const isAllFilteredSelected = filteredSiswaForSelection.length > 0 &&
+    filteredSiswaForSelection.every(s => selectedStudentIds.includes(s.id));
+
   const handleSave = (e) => {
     e.preventDefault();
 
@@ -102,12 +209,13 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
       jumlahSoal: Number(jumlahSoal),
       metodeSoal,
       selectedQuestionIds,
+      selectedStudentIds,
       statusUjian: 'aktif'
     };
 
-    saveExamSettingForMapel(selectedMapelObj.id, payload);
+    saveExamSettingForMapel(currentMapelObj.id, payload);
 
-    alert(`Pengaturan Ujian & Jadwal untuk "${currentMapelObj.label}" berhasil disimpan!\n(Jam Selesai otomatis diatur ke ${jamSelesai})`);
+    alert(`Pengaturan Ujian & Jadwal untuk "${currentMapelObj.label}" berhasil disimpan!\n• ${selectedStudentIds.length} Siswa Terdaftar sebagai Peserta Ujian.\n• Jam Selesai: ${jamSelesai}`);
     if (onSaveSuccess) onSaveSuccess();
   };
 
@@ -140,10 +248,20 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
         
         {/* Left Column: Selector Mapel */}
         <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-xl border border-slate-100 space-y-4">
-          <h3 className="font-bold text-slate-800 text-base border-b pb-3 flex items-center gap-2">
-            <Filter className="w-4 h-4 text-[#007bff]" />
-            Pilih Mata Pelajaran
-          </h3>
+          <div className="flex items-center justify-between border-b pb-3">
+            <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+              <Filter className="w-4 h-4 text-[#007bff]" />
+              Pilih Mata Pelajaran
+            </h3>
+            <button
+              type="button"
+              onClick={handleOpenAddQuickMapel}
+              className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-black py-1 px-3 rounded-lg shadow-xs transition-all flex items-center gap-1"
+              title="Tambah Mata Pelajaran Baru ke Kategori Ini"
+            >
+              <Plus className="w-3.5 h-3.5" /> + Tambah Mapel
+            </button>
+          </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Kategori Jenjang/Jenis</label>
@@ -151,7 +269,7 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
               value={selectedKategori}
               onChange={(e) => {
                 setSelectedKategori(e.target.value);
-                const newList = MAPEL_DATABASE[e.target.value] || [];
+                const newList = mapelDb[e.target.value] || [];
                 if (newList.length > 0) setSelectedMapelId(newList[0].id);
               }}
               className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 font-semibold outline-none focus:border-[#007bff] cursor-pointer"
@@ -174,16 +292,48 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
                   <div
                     key={item.id}
                     onClick={() => setSelectedMapelId(item.id)}
-                    className={`p-3 rounded-lg text-xs md:text-sm font-semibold cursor-pointer transition-all flex items-center justify-between ${
+                    className={`p-3 rounded-lg text-xs md:text-sm font-semibold cursor-pointer transition-all flex items-center justify-between group ${
                       isSelected
                         ? 'bg-[#007bff] text-white shadow-md'
                         : 'hover:bg-white text-slate-700'
                     }`}
                   >
-                    <span>{item.label}</span>
+                    <span className="truncate pr-2">{item.label}</span>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Quick Edit Icon */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleOpenEditQuickMapel(item); }}
+                        className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isSelected ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-[#007bff] hover:bg-slate-100'
+                        }`}
+                        title="Edit nama mapel ini"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Quick Delete Icon */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteQuickMapel(item.id, item.label, e)}
+                        className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isSelected ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                        }`}
+                        title="Hapus mapel ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
+
+              {currentMapelList.length === 0 && (
+                <div className="p-4 text-center text-xs text-slate-400 italic">
+                  Belum ada mata pelajaran. Klik "+ Tambah Mapel" di atas.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -451,10 +601,290 @@ export default function PengaturanJadwalPage({ initialMapel, onSaveSuccess }) {
 
           </div>
 
+          {/* Card 3: PILIH PESERTA UJIAN (HANYA BERLAKU UNTUK SISWA) */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-100 space-y-5">
+            
+            <div className="border-b pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-md uppercase flex items-center gap-1.5 w-fit">
+                  <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+                  SASARAN PESERTA UJIAN (HANYA BERLAKU UNTUK SISWA)
+                </span>
+                <h3 className="text-lg font-extrabold text-slate-900 mt-1">
+                  Pilih Peserta Siswa yang Berhak Mengikuti Ujian
+                </h3>
+              </div>
+
+              {/* Stats Counter Badge */}
+              <div className="bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-xl text-xs font-bold text-purple-900 flex items-center gap-1.5 self-start sm:self-auto">
+                <Users className="w-4 h-4 text-purple-600" />
+                <span>Terpilih: {selectedStudentIds.length} / {allSiswaList.length} Siswa</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Pilihlah tingkat kelas (X, XI, XII), jurusan (TKR, TKJ, TAV), atau rombel tertentu. Anda dapat mencentang <strong>"Pilih Semua"</strong> atau memilih siswa <strong>satu per satu</strong>.
+            </p>
+
+            {/* Filter Bar: Tingkat, Jurusan, Rombel & Search */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
+              
+              {/* Filter Tingkat (X, XI, XII) */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tingkat Kelas</label>
+                <select
+                  value={filterStudentTingkat}
+                  onChange={(e) => setFilterStudentTingkat(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Tingkat (X, XI, XII)</option>
+                  <option value="X">Kelas X (Tingkat 10)</option>
+                  <option value="XI">Kelas XI (Tingkat 11)</option>
+                  <option value="XII">Kelas XII (Tingkat 12)</option>
+                </select>
+              </div>
+
+              {/* Filter Jurusan */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Jurusan / Keahlian</label>
+                <select
+                  value={filterStudentJurusan}
+                  onChange={(e) => setFilterStudentJurusan(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Jurusan</option>
+                  <option value="TKR">TKR - Teknik Kendaraan Ringan</option>
+                  <option value="TKJ">TKJ - Teknik Komputer & Jaringan</option>
+                  <option value="TAV">TAV - Teknik Audio Video</option>
+                </select>
+              </div>
+
+              {/* Filter Rombel Spesifik */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Rombel Kelas</label>
+                <select
+                  value={filterStudentKelas}
+                  onChange={(e) => setFilterStudentKelas(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Rombel</option>
+                  {Array.from(new Set(allSiswaList.map(s => s.kelas))).map(k => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search Box */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Cari Nama / NISN</label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={filterStudentSearch}
+                    onChange={(e) => setFilterStudentSearch(e.target.value)}
+                    placeholder="Nama / NISN..."
+                    className="w-full pl-8 pr-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#007bff]"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Quick Action Selection Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 pt-1">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllFilteredStudents}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Pilih Semua Sesuai Filter ({filteredSiswaForSelection.length} Siswa)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDeselectAllFilteredStudents}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 active:scale-[0.98]"
+                >
+                  Batal Pilih Semua
+                </button>
+              </div>
+
+              <span className="text-xs font-semibold text-slate-400">
+                Menampilkan {filteredSiswaForSelection.length} dari {allSiswaList.length} siswa
+              </span>
+            </div>
+
+            {/* Student Table with Checkboxes */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+              <div className="max-h-[380px] overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 font-extrabold sticky top-0 z-10">
+                    <tr>
+                      <th className="p-3 text-center w-10 border-r border-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={isAllFilteredSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) handleSelectAllFilteredStudents();
+                            else handleDeselectAllFilteredStudents();
+                          }}
+                          className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                          title="Centang / Hapus Centang Semua Siswa yang Tampil"
+                        />
+                      </th>
+                      <th className="p-3 border-r border-slate-200 w-28">NISN / USER</th>
+                      <th className="p-3 border-r border-slate-200">NAMA SISWA PESERTA</th>
+                      <th className="p-3 border-r border-slate-200 text-center w-28">TINGKAT & KELAS</th>
+                      <th className="p-3 border-r border-slate-200">JURUSAN</th>
+                      <th className="p-3 border-r border-slate-200 text-center w-28">STATUS UJIAN</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
+                    {filteredSiswaForSelection.map((item, idx) => {
+                      const isSelected = selectedStudentIds.includes(item.id);
+                      const sTingkat = parseTingkat(item.kelas);
+
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => handleToggleStudentSelect(item.id)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected ? 'bg-purple-50/60 font-semibold' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <td className="p-3 text-center border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleStudentSelect(item.id)}
+                              className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                            />
+                          </td>
+                          <td className="p-3 font-mono font-bold text-blue-900 border-r border-slate-200 text-xs">
+                            {item.nisn}
+                          </td>
+                          <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
+                            {item.nama}
+                          </td>
+                          <td className="p-3 border-r border-slate-200 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border inline-block ${
+                              sTingkat === 'XII'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : sTingkat === 'XI'
+                                ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                : 'bg-purple-100 text-purple-900 border-purple-300'
+                            }`}>
+                              {item.kelas}
+                            </span>
+                          </td>
+                          <td className="p-3 border-r border-slate-200 text-xs text-slate-600">
+                            {item.jurusan}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isSelected ? (
+                              <span className="bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded text-[10px] border border-emerald-300 inline-flex items-center gap-1">
+                                <Check className="w-3 h-3 text-emerald-600" /> Terdaftar
+                              </span>
+                            ) : (
+                              <span className="bg-slate-100 text-slate-400 font-medium px-2 py-0.5 rounded text-[10px]">
+                                Non-Peserta
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredSiswaForSelection.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-xs text-slate-400 italic">
+                          Tidak ditemukan siswa yang sesuai dengan filter (Tingkat: {filterStudentTingkat}, Jurusan: {filterStudentJurusan}).
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
         </div>
 
       </div>
 
+      {/* QUICK MAPEL ADD & EDIT MODAL */}
+      {showQuickMapelModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in fade-in zoom-in-95 duration-150 my-8">
+            <div className="flex items-center justify-between border-b pb-3 mb-4">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-600" />
+                {editingQuickMapel ? 'Edit Nama Mata Pelajaran' : 'Tambah Mata Pelajaran Baru'}
+              </h3>
+              <button onClick={() => setShowQuickMapelModal(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickMapel} className="space-y-4 text-xs">
+              
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kategori Jenis Mapel</label>
+                <div className="p-2.5 bg-slate-100 rounded-xl text-xs font-bold text-slate-800 border border-slate-200">
+                  {selectedKategori === 'sma-wajib' ? 'SMA/SMK - Mata Pelajaran Wajib' :
+                   selectedKategori === 'sma-pilihan' ? 'SMA/SMK - Mata Pelajaran Pilihan' :
+                   selectedKategori === 'smp' ? 'SMP / MTs Sederajat' : 'SD / MI Sederajat'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kode / ID Mapel (Slug)</label>
+                <input
+                  type="text"
+                  value={quickMapelForm.id}
+                  onChange={(e) => setQuickMapelForm({ ...quickMapelForm, id: e.target.value })}
+                  placeholder="Contoh: pkk / dkv / fisika"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-amber-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Kosongkan untuk membuat kode ID otomatis dari nama mapel.</p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Mata Pelajaran *</label>
+                <input
+                  type="text"
+                  required
+                  value={quickMapelForm.label}
+                  onChange={(e) => setQuickMapelForm({ ...quickMapelForm, label: e.target.value })}
+                  placeholder="Contoh: Projek Kreatif dan Kewirausahaan (PKK)"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickMapelModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs shadow-md"
+                >
+                  Simpan Mata Pelajaran
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

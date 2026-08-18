@@ -1,3 +1,6 @@
+// DATABASE MASTER MATA PELAJARAN (WAJIB & PILIHAN) ANBK
+const MAPEL_STORAGE_KEY = 'ANBK_MAPEL_DATABASE_V1';
+
 export const JENJANG_OPTIONS = [
   { id: 'sma', label: 'SMA/MA/SMK/MAK/Sederajat', hasJenisMapel: true },
   { id: 'smp', label: 'SMP/MTs/Sederajat', hasJenisMapel: false },
@@ -9,7 +12,7 @@ export const JENIS_MAPEL_OPTIONS = [
   { id: 'pilihan', label: 'Mata Pelajaran Pilihan' },
 ];
 
-export const MAPEL_DATABASE = {
+export const INITIAL_MAPEL_DATABASE = {
   // SMA Wajib
   'sma-wajib': [
     { id: 'matematika', label: 'Matematika' },
@@ -82,3 +85,61 @@ export const MAPEL_DATABASE = {
     { id: 'ipas-sd', label: 'IPAS - SD Sederajat' },
   ],
 };
+
+export function getMapelDatabase() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return INITIAL_MAPEL_DATABASE;
+  }
+  const saved = localStorage.getItem(MAPEL_STORAGE_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object' && parsed['sma-wajib']) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error('Error parsing mapel database:', e);
+    }
+  }
+  localStorage.setItem(MAPEL_STORAGE_KEY, JSON.stringify(INITIAL_MAPEL_DATABASE));
+  return INITIAL_MAPEL_DATABASE;
+}
+
+// Compatibility export after getMapelDatabase function is declared
+export const MAPEL_DATABASE = getMapelDatabase();
+
+export function saveMapelItem(categoryKey, mapelObj) {
+  const allDb = getMapelDatabase();
+  const catList = [...(allDb[categoryKey] || [])];
+
+  const targetId = mapelObj.id || mapelObj.label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const index = catList.findIndex(m => m.id === targetId);
+
+  const newObj = {
+    id: targetId,
+    label: mapelObj.label.trim()
+  };
+
+  if (index >= 0) {
+    catList[index] = newObj;
+  } else {
+    catList.push(newObj);
+  }
+
+  allDb[categoryKey] = catList;
+  localStorage.setItem(MAPEL_STORAGE_KEY, JSON.stringify(allDb));
+  return allDb;
+}
+
+export function deleteMapelItem(categoryKey, mapelId) {
+  const allDb = getMapelDatabase();
+  const catList = (allDb[categoryKey] || []).filter(m => m.id !== mapelId);
+  allDb[categoryKey] = catList;
+  localStorage.setItem(MAPEL_STORAGE_KEY, JSON.stringify(allDb));
+  return allDb;
+}
+
+export function resetMapelDatabase() {
+  localStorage.setItem(MAPEL_STORAGE_KEY, JSON.stringify(INITIAL_MAPEL_DATABASE));
+  return INITIAL_MAPEL_DATABASE;
+}
