@@ -52,100 +52,67 @@ export function getBankSoal() {
       // Helper to merge default questions with existing user questions without losing any previous questions
       const mergePreservingExisting = (existingList = [], defaultList = []) => {
         const map = new Map();
-        (defaultList || []).map(cleanQuestionObj).forEach(q => map.set(String(q.id), q));
-        (existingList || []).map(cleanQuestionObj).forEach(q => map.set(String(q.id), q));
+        
+        // 1. Map all default questions by unique key
+        (defaultList || []).map(cleanQuestionObj).forEach(q => {
+          map.set(String(q.id), q);
+        });
+
+        // 2. Determine max ID to prevent ID collision
+        let maxId = 0;
+        Array.from(map.values()).concat(existingList || []).forEach(q => {
+          const numId = parseInt(q.id, 10);
+          if (!isNaN(numId) && numId > maxId) maxId = numId;
+        });
+
+        // 3. Add existing questions, preserving any user-added questions
+        (existingList || []).map(cleanQuestionObj).forEach(q => {
+          const normText = normalizeQuestionText(q.questionText || '');
+          let foundKey = null;
+          
+          for (let [k, item] of map.entries()) {
+            if (normalizeQuestionText(item.questionText || '') === normText && normText !== '') {
+              foundKey = k;
+              break;
+            }
+          }
+
+          if (foundKey) {
+            // Update default question with user edits/stimulus
+            map.set(foundKey, { ...map.get(foundKey), ...q });
+          } else {
+            // New user-created question: preserve it with a non-colliding ID if needed
+            if (map.has(String(q.id))) {
+              maxId += 1;
+              map.set(String(maxId), { ...q, id: maxId });
+            } else {
+              map.set(String(q.id), q);
+            }
+          }
+        });
+
         return Array.from(map.values());
       };
 
-      // Sync b-indo questions from MOCK_EXAMS while preserving existing custom questions
-      if (!parsed['b-indo']) {
-        parsed['b-indo'] = {
-          title: 'Bahasa Indonesia - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['b-indo']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedIndo = mergePreservingExisting(parsed['b-indo'].questions, MOCK_EXAMS['b-indo']?.questions);
-        if (mergedIndo.length !== parsed['b-indo'].questions.length || !parsed['b-indo'].questions[0]?.stimulus) {
-          parsed['b-indo'].questions = mergedIndo;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        }
-      }
+      // Dynamically sync ALL subjects in MOCK_EXAMS while preserving pre-existing questions
+      Object.keys(MOCK_EXAMS).forEach(subjectKey => {
+        const mockExam = MOCK_EXAMS[subjectKey];
+        if (!mockExam) return;
 
-      // Sync b-ing questions from MOCK_EXAMS while preserving existing custom questions
-      if (!parsed['b-ing']) {
-        parsed['b-ing'] = {
-          title: 'Bahasa Inggris - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['b-ing']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedIng = mergePreservingExisting(parsed['b-ing'].questions, MOCK_EXAMS['b-ing']?.questions);
-        if (mergedIng.length !== parsed['b-ing'].questions.length || !parsed['b-ing'].questions[0]?.stimulus) {
-          parsed['b-ing'].questions = mergedIng;
+        if (!parsed[subjectKey]) {
+          parsed[subjectKey] = {
+            title: mockExam.title || subjectKey,
+            questions: mockExam.questions || []
+          };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        } else {
+          const merged = mergePreservingExisting(parsed[subjectKey].questions, mockExam.questions);
+          if (merged.length > (parsed[subjectKey].questions || []).length || !parsed[subjectKey].questions?.[0]?.stimulus) {
+            parsed[subjectKey].questions = merged;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          }
         }
-      }
-
-      // Sync matematika questions from MOCK_EXAMS while preserving existing custom questions
-      if (!parsed['matematika']) {
-        parsed['matematika'] = {
-          title: 'Matematika - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['matematika']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedMat = mergePreservingExisting(parsed['matematika'].questions, MOCK_EXAMS['matematika']?.questions);
-        if (mergedMat.length !== parsed['matematika'].questions.length) {
-          parsed['matematika'].questions = mergedMat;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        }
-      }
-
-      // Sync matematika-tl questions from MOCK_EXAMS
-      if (!parsed['matematika-tl']) {
-        parsed['matematika-tl'] = {
-          title: 'Matematika Tingkat Lanjut - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['matematika-tl']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedMatTL = mergePreservingExisting(parsed['matematika-tl'].questions, MOCK_EXAMS['matematika-tl']?.questions);
-        if (mergedMatTL.length !== parsed['matematika-tl'].questions.length) {
-          parsed['matematika-tl'].questions = mergedMatTL;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        }
-      }
-
-      // Sync pancasila-pilihan questions from MOCK_EXAMS
-      if (!parsed['pancasila-pilihan']) {
-        parsed['pancasila-pilihan'] = {
-          title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['pancasila-pilihan']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedPanPilihan = mergePreservingExisting(parsed['pancasila-pilihan'].questions, MOCK_EXAMS['pancasila-pilihan']?.questions);
-        if (mergedPanPilihan.length !== parsed['pancasila-pilihan'].questions.length) {
-          parsed['pancasila-pilihan'].questions = mergedPanPilihan;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        }
-      }
-
-      // Sync sejarah questions from MOCK_EXAMS
-      if (!parsed['sejarah']) {
-        parsed['sejarah'] = {
-          title: 'Sejarah (Pilihan) - SMA/MA/SMK/MAK',
-          questions: MOCK_EXAMS['sejarah']?.questions || []
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } else {
-        const mergedSejarah = mergePreservingExisting(parsed['sejarah'].questions, MOCK_EXAMS['sejarah']?.questions);
-        if (mergedSejarah.length !== parsed['sejarah'].questions.length) {
-          parsed['sejarah'].questions = mergedSejarah;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        }
-      }
+      });
 
       // Return the parsed data AS IS — preserve all user-added questions
       return parsed;
