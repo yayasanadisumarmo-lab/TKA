@@ -391,5 +391,21 @@ export const MATEMATIKA_2025_QUESTIONS = [
     ],
     correctAnswer: 'D',
     explanation: 'Jika 4 orang sebelumnya mengambil kertas kosong, kertas kosong selalu dikembalikan lagi ke kotak $\\implies$ isi kotak tetap 6 Minuman, 4 Makanan, 5 Kosong (total 15).\nPeluang Ani $= \\frac{6 + 4}{15} = \\frac{10}{15} = \\frac{2}{3}$. Jadi 4 orang sebelumnya mengambil 4 kertas kosong.'
+  },
+
+  // SOAL 26: Trigonometri Sudut Tumpul sin A = 1/a
+  {
+    id: 326,
+    type: 'single',
+    questionText: 'Diketahui $\\sin A = \\frac{1}{a}$, dengan A adalah sudut tumpul ($90^\\circ < A < 180^\\circ$).\n\nNilai $\\cos A = ....$',
+    options: [
+      { key: 'A', text: '\\frac{a}{\\sqrt{a^2 + 1}}' },
+      { key: 'B', text: '\\frac{1}{\\sqrt{a^2 + 1}}' },
+      { key: 'C', text: '\\frac{\\sqrt{a^2 - 1}}{a}' },
+      { key: 'D', text: '-\\frac{\\sqrt{a^2 - 1}}{a}', isCorrect: true },
+      { key: 'E', text: '-\\frac{\\sqrt{a^2 + 1}}{a}' }
+    ],
+    correctAnswer: 'D',
+    explanation: '1. Diketahui $\\sin A = \\frac{\\text{sisi depan}}{\\text{sisi miring}} = \\frac{1}{a}$.\n2. Sisi samping segitiga siku-siku $= \\sqrt{\\text{miring}^2 - \\text{depan}^2} = \\sqrt{a^2 - 1^2} = \\sqrt{a^2 - 1}$.\n3. Karena A adalah **sudut tumpul** (Kuadran II), nilai kosinus bernilai **negatif** ($-$).\n4. Maka $\\cos A = -\\frac{\\text{sisi samping}}{\\text{sisi miring}} = -\\frac{\\sqrt{a^2 - 1}}{a}$.'
   }
 ];
