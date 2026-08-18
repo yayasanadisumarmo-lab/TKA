@@ -117,6 +117,21 @@ export function getBankSoal() {
         }
       }
 
+      // Sync pancasila-pilihan questions from MOCK_EXAMS
+      if (!parsed['pancasila-pilihan']) {
+        parsed['pancasila-pilihan'] = {
+          title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
+          questions: MOCK_EXAMS['pancasila-pilihan']?.questions || []
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } else {
+        const mergedPanPilihan = mergePreservingExisting(parsed['pancasila-pilihan'].questions, MOCK_EXAMS['pancasila-pilihan']?.questions);
+        if (mergedPanPilihan.length !== parsed['pancasila-pilihan'].questions.length) {
+          parsed['pancasila-pilihan'].questions = mergedPanPilihan;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      }
+
       // Return the parsed data AS IS — preserve all user-added questions
       return parsed;
     } catch (e) {
@@ -141,6 +156,10 @@ export function getBankSoal() {
     'matematika-tl': {
       title: 'Matematika Tingkat Lanjut - SMA/MA/SMK/MAK',
       questions: MOCK_EXAMS['matematika-tl']?.questions || []
+    },
+    'pancasila-pilihan': {
+      title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
+      questions: MOCK_EXAMS['pancasila-pilihan']?.questions || []
     }
   };
   

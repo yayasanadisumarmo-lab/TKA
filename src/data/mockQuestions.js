@@ -2,6 +2,7 @@ import { BAHASA_INDONESIA_2025_QUESTIONS } from './bahasaIndonesiaQuestions';
 import { BAHASA_INGGRIS_2025_QUESTIONS } from './bahasaInggrisQuestions';
 import { MATEMATIKA_2025_QUESTIONS } from './matematikaQuestions2025';
 import { MATEMATIKA_TL_2025_QUESTIONS } from './matematikaTLQuestions2025';
+import { PANCASILA_PILIHAN_2025_QUESTIONS } from './pancasilaPilihanQuestions2025';
 
 const EXISTING_MATH_QUESTIONS = [
   {
@@ -99,5 +100,11 @@ export const MOCK_EXAMS = {
     title: 'Matematika Tingkat Lanjut - SMA/MA/SMK/MAK',
     durationMinutes: 75,
     questions: MATEMATIKA_TL_2025_QUESTIONS
+  },
+
+  'pancasila-pilihan': {
+    title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
+    durationMinutes: 75,
+    questions: PANCASILA_PILIHAN_2025_QUESTIONS
   }
 };
