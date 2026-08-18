@@ -132,6 +132,21 @@ export function getBankSoal() {
         }
       }
 
+      // Sync sejarah questions from MOCK_EXAMS
+      if (!parsed['sejarah']) {
+        parsed['sejarah'] = {
+          title: 'Sejarah (Pilihan) - SMA/MA/SMK/MAK',
+          questions: MOCK_EXAMS['sejarah']?.questions || []
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } else {
+        const mergedSejarah = mergePreservingExisting(parsed['sejarah'].questions, MOCK_EXAMS['sejarah']?.questions);
+        if (mergedSejarah.length !== parsed['sejarah'].questions.length) {
+          parsed['sejarah'].questions = mergedSejarah;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      }
+
       // Return the parsed data AS IS — preserve all user-added questions
       return parsed;
     } catch (e) {
@@ -160,6 +175,10 @@ export function getBankSoal() {
     'pancasila-pilihan': {
       title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
       questions: MOCK_EXAMS['pancasila-pilihan']?.questions || []
+    },
+    'sejarah': {
+      title: 'Sejarah (Pilihan) - SMA/MA/SMK/MAK',
+      questions: MOCK_EXAMS['sejarah']?.questions || []
     }
   };
   

@@ -3,6 +3,7 @@ import { BAHASA_INGGRIS_2025_QUESTIONS } from './bahasaInggrisQuestions';
 import { MATEMATIKA_2025_QUESTIONS } from './matematikaQuestions2025';
 import { MATEMATIKA_TL_2025_QUESTIONS } from './matematikaTLQuestions2025';
 import { PANCASILA_PILIHAN_2025_QUESTIONS } from './pancasilaPilihanQuestions2025';
+import { SEJARAH_PILIHAN_2025_QUESTIONS } from './sejarahPilihanQuestions2025';
 
 const EXISTING_MATH_QUESTIONS = [
   {
@@ -106,5 +107,11 @@ export const MOCK_EXAMS = {
     title: 'Pendidikan Pancasila (Pilihan) - SMA/MA/SMK/MAK',
     durationMinutes: 75,
     questions: PANCASILA_PILIHAN_2025_QUESTIONS
+  },
+
+  'sejarah': {
+    title: 'Sejarah (Pilihan) - SMA/MA/SMK/MAK',
+    durationMinutes: 75,
+    questions: SEJARAH_PILIHAN_2025_QUESTIONS
   }
 };
