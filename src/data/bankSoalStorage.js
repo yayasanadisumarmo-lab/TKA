@@ -102,6 +102,21 @@ export function getBankSoal() {
         }
       }
 
+      // Sync matematika-tl questions from MOCK_EXAMS
+      if (!parsed['matematika-tl']) {
+        parsed['matematika-tl'] = {
+          title: 'Matematika Tingkat Lanjut - SMA/MA/SMK/MAK',
+          questions: MOCK_EXAMS['matematika-tl']?.questions || []
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } else {
+        const mergedMatTL = mergePreservingExisting(parsed['matematika-tl'].questions, MOCK_EXAMS['matematika-tl']?.questions);
+        if (mergedMatTL.length !== parsed['matematika-tl'].questions.length) {
+          parsed['matematika-tl'].questions = mergedMatTL;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      }
+
       // Return the parsed data AS IS — preserve all user-added questions
       return parsed;
     } catch (e) {
@@ -122,6 +137,10 @@ export function getBankSoal() {
     'matematika': {
       title: 'Matematika - SMA/MA/SMK/MAK',
       questions: MOCK_EXAMS['matematika']?.questions || []
+    },
+    'matematika-tl': {
+      title: 'Matematika Tingkat Lanjut - SMA/MA/SMK/MAK',
+      questions: MOCK_EXAMS['matematika-tl']?.questions || []
     }
   };
   
