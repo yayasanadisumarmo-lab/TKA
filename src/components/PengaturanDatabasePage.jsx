@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserCheck, Search, Plus, Trash2, Edit3, RefreshCw, Shield, GraduationCap, CheckCircle2, X, Eye, KeyRound, BookOpen, Layers, FolderPlus } from 'lucide-react';
+import { UserCheck, Search, Plus, Trash2, Edit3, RefreshCw, Shield, GraduationCap, CheckCircle2, X, Eye, KeyRound, BookOpen, Layers, FolderPlus, Database, Download, Upload, FileText, HardDrive, FileJson, Server, RotateCcw, AlertTriangle, Save } from 'lucide-react';
 import { getGuruData, saveGuruItem, deleteGuruItem, resetGuruData, resetGuruPassword, DEFAULT_TEACHER_PASSWORD } from '../data/guruDatabase';
 import { getSiswaData, saveSiswaItem, deleteSiswaItem, resetSiswaData } from '../data/siswaDatabase';
 import { getMapelDatabase, saveMapelItem, deleteMapelItem, resetMapelDatabase } from '../data/subjects';
+import { getBankSoal, saveFullBankSoal } from '../data/bankSoalStorage';
+import { getAllStudentProgress } from '../data/studentProgressStorage';
 
 export default function PengaturanDatabasePage() {
-  // Main Sub-Tab Switcher: 'guru' | 'siswa' | 'mapel'
+  // Main Sub-Tab Switcher: 'guru' | 'siswa' | 'mapel' | 'backup_restore'
   const [subTab, setSubTab] = useState('guru');
 
   // Database States
@@ -258,6 +260,174 @@ export default function PengaturanDatabasePage() {
     }
   };
 
+  // ==========================================
+  // BACKUP & RESTORE HANDLERS (JSON EXPORT/IMPORT)
+  // ==========================================
+  const downloadJSON = (dataObj, fileName) => {
+    const jsonStr = JSON.stringify(dataObj, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const getFormattedDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  // 1. Backup Bank Soal
+  const handleBackupSoal = () => {
+    const bank = getBankSoal();
+    downloadJSON(bank, `Backup_Bank_Soal_ANBK_${getFormattedDate()}.json`);
+  };
+
+  // 2. Backup Hasil Ujian
+  const handleBackupHasilUjian = () => {
+    const progress = getAllStudentProgress();
+    downloadJSON(progress, `Backup_Hasil_Ujian_ANBK_${getFormattedDate()}.json`);
+  };
+
+  // 3. Backup Data Siswa
+  const handleBackupSiswa = () => {
+    const siswa = getSiswaData();
+    downloadJSON(siswa, `Backup_Data_Siswa_ANBK_${getFormattedDate()}.json`);
+  };
+
+  // 4. Backup Data Guru
+  const handleBackupGuru = () => {
+    const guru = getGuruData();
+    downloadJSON(guru, `Backup_Data_Guru_ANBK_${getFormattedDate()}.json`);
+  };
+
+  // 5. Backup Master Penuh (All-in-One)
+  const handleBackupMasterFull = () => {
+    const fullBackup = {
+      appName: 'Aplikasi ANBK SMK Adi Sumarmo',
+      backupDate: new Date().toISOString(),
+      bankSoal: getBankSoal(),
+      studentProgress: getAllStudentProgress(),
+      siswaDatabase: getSiswaData(),
+      guruDatabase: getGuruData(),
+      mapelDatabase: getMapelDatabase(),
+      examSettings: JSON.parse(localStorage.getItem('ANBK_EXAM_SETTINGS_V1') || '{}')
+    };
+    downloadJSON(fullBackup, `Backup_Master_Sistem_ANBK_Full_${getFormattedDate()}.json`);
+  };
+
+  // Read File Helper
+  const readJsonFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          resolve(parsed);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsText(file);
+    });
+  };
+
+  // 1. Restore Bank Soal File
+  const handleRestoreSoalFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await readJsonFile(file);
+      if (typeof data !== 'object') throw new Error('Format JSON tidak valid!');
+      
+      saveFullBankSoal(data);
+      alert('✅ Berhasil memulihkan (restore) Bank Soal!');
+      loadAllData();
+    } catch (err) {
+      alert('❌ Gagal memulihkan Bank Soal: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  // 2. Restore Hasil Ujian File
+  const handleRestoreHasilFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await readJsonFile(file);
+      if (typeof data !== 'object') throw new Error('Format JSON hasil ujian tidak valid!');
+
+      localStorage.setItem('ANBK_STUDENT_PROGRESS_V1', JSON.stringify(data));
+      alert('✅ Berhasil memulihkan (restore) Data Hasil Ujian!');
+      loadAllData();
+    } catch (err) {
+      alert('❌ Gagal memulihkan Hasil Ujian: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  // 3. Restore Data Siswa File
+  const handleRestoreSiswaFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await readJsonFile(file);
+      if (!Array.isArray(data)) throw new Error('Data Siswa harus berupa Array JSON!');
+
+      localStorage.setItem('ANBK_SISWA_DATABASE_V1', JSON.stringify(data));
+      alert(`✅ Berhasil memulihkan ${data.length} Data Siswa!`);
+      loadAllData();
+    } catch (err) {
+      alert('❌ Gagal memulihkan Data Siswa: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  // 4. Restore Data Guru File
+  const handleRestoreGuruFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await readJsonFile(file);
+      if (!Array.isArray(data)) throw new Error('Data Guru harus berupa Array JSON!');
+
+      localStorage.setItem('ANBK_GURU_DATABASE_V1', JSON.stringify(data));
+      alert(`✅ Berhasil memulihkan ${data.length} Data Guru!`);
+      loadAllData();
+    } catch (err) {
+      alert('❌ Gagal memulihkan Data Guru: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  // 5. Restore Master Penuh (All-in-One)
+  const handleRestoreMasterFullFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await readJsonFile(file);
+      if (window.confirm('⚠️ APAKAH ANDA YAKIN INGIN MEMULIHKAN SELURUH MASTER SYSTEM?\nData yang ada saat ini akan diperbarui dari file backup.')) {
+        if (data.bankSoal) saveFullBankSoal(data.bankSoal);
+        if (data.studentProgress) localStorage.setItem('ANBK_STUDENT_PROGRESS_V1', JSON.stringify(data.studentProgress));
+        if (data.siswaDatabase) localStorage.setItem('ANBK_SISWA_DATABASE_V1', JSON.stringify(data.siswaDatabase));
+        if (data.guruDatabase) localStorage.setItem('ANBK_GURU_DATABASE_V1', JSON.stringify(data.guruDatabase));
+        if (data.mapelDatabase) localStorage.setItem('ANBK_MAPEL_DATABASE_V1', JSON.stringify(data.mapelDatabase));
+        if (data.examSettings) localStorage.setItem('ANBK_EXAM_SETTINGS_V1', JSON.stringify(data.examSettings));
+
+        alert('🎉 Berhasil memulihkan SELURUH Master Database Sistem!');
+        loadAllData();
+      }
+    } catch (err) {
+      alert('❌ Gagal memulihkan Master System: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
   // Filtering Guru
   const filteredGuru = guruList.filter(g => {
     const query = searchQuery.toLowerCase();
@@ -343,7 +513,19 @@ export default function PengaturanDatabasePage() {
           }`}
         >
           <BookOpen className="w-4.5 h-4.5" />
-          Master Mapel (Wajib & Pilihan)
+          Master Mapel
+        </button>
+
+        <button
+          onClick={() => { setSubTab('backup_restore'); setSearchQuery(''); }}
+          className={`flex-1 py-3 px-3 rounded-xl text-xs md:text-sm font-extrabold transition-all flex items-center justify-center gap-2 ${
+            subTab === 'backup_restore'
+              ? 'bg-emerald-500 text-white shadow-md'
+              : 'text-blue-100 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Database className="w-4.5 h-4.5" />
+          💾 Backup & Restore
         </button>
       </div>
 
@@ -948,6 +1130,265 @@ export default function PengaturanDatabasePage() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* TAB 4: BACKUP & RESTORE MASTER DATA (SOAL, HASIL, SISWA, GURU) */}
+      {subTab === 'backup_restore' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          
+          {/* Summary Stats Header Banner */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-blue-400/20">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-black tracking-widest text-amber-300 uppercase bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+                  PUSAT CADANGAN DATA (BACKUP & RESTORE)
+                </span>
+                <h2 className="text-2xl md:text-3xl font-black mt-2">Master Backup & Restore Center</h2>
+                <p className="text-sm text-blue-100/90 mt-1 max-w-2xl">
+                  Kelola keselamatan data ANBK Anda. Ekspor (Backup) atau Impor (Restore) data Soal, Hasil Ujian & Nilai, Data Siswa, dan Data Guru secara mandiri maupun dalam 1 paket master komplit.
+                </p>
+              </div>
+
+              <button
+                onClick={handleBackupMasterFull}
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-5 py-3 rounded-2xl shadow-lg transition-all flex items-center gap-2.5 text-sm shrink-0 active:scale-95"
+              >
+                <Database className="w-5 h-5 text-slate-950" />
+                ⭐ Backup Master Penuh (All-in-One)
+              </button>
+            </div>
+
+            {/* Database Realtime Counters */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
+              <div className="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                <span className="text-[11px] font-bold text-blue-200 block uppercase">📚 Total Soal Tersimpan</span>
+                <span className="text-xl font-black text-white mt-1 block">
+                  {Object.values(getBankSoal()).reduce((acc, curr) => acc + (curr.questions?.length || 0), 0)} Soal
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                <span className="text-[11px] font-bold text-emerald-200 block uppercase">📑 Rekap Hasil Ujian</span>
+                <span className="text-xl font-black text-emerald-300 mt-1 block">
+                  {Object.keys(getAllStudentProgress()).length} Data Peserta
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                <span className="text-[11px] font-bold text-purple-200 block uppercase">🎓 Total Siswa Terdaftar</span>
+                <span className="text-xl font-black text-purple-300 mt-1 block">
+                  {siswaList.length} Siswa
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                <span className="text-[11px] font-bold text-amber-200 block uppercase">👨‍🏫 Total Guru & Tendik</span>
+                <span className="text-xl font-black text-amber-300 mt-1 block">
+                  {guruList.length} Guru
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1: UNDUH / BACKUP DATA (EXPORT JSON) */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Download className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-extrabold text-slate-800">1. Unduh / Export Backup Data (.json)</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              {/* Backup Bank Soal */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Backup Bank Soal</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cadangkan seluruh paket soal Wajib & Pilihan, wacana, kunci jawaban, dan pembahasan.
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackupSoal}
+                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Soal (.json)
+                </button>
+              </div>
+
+              {/* Backup Hasil Ujian */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Backup Hasil Ujian</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cadangkan rekap jawaban siswa, sisa waktu, status pengerjaan, dan skor nilai per mapel.
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackupHasilUjian}
+                  className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Hasil (.json)
+                </button>
+              </div>
+
+              {/* Backup Data Siswa */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-3">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Backup Data Siswa</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cadangkan biodata 822+ siswa, NISN, NIK, Rombel/Kelas, Jurusan, dan Sesi Ujian.
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackupSiswa}
+                  className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Siswa (.json)
+                </button>
+              </div>
+
+              {/* Backup Data Guru */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Backup Data Guru</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cadangkan data guru, NIY, mata pelajaran ampu, status wali kelas, dan akun proktor.
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackupGuru}
+                  className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Guru (.json)
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Section 2: MEMULIHKAN / RESTORE DATA (IMPORT JSON) */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-lg font-extrabold text-slate-800">2. Memulihkan / Import Restore Data (.json)</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              {/* Restore Bank Soal */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Restore Bank Soal</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Pilih file <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-mono text-[11px]">.json</code> backup soal untuk dipulihkan.
+                  </p>
+                </div>
+                <label className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs">
+                  <Upload className="w-4 h-4 text-blue-400" />
+                  <span>Upload File Soal</span>
+                  <input type="file" accept=".json" onChange={handleRestoreSoalFile} className="hidden" />
+                </label>
+              </div>
+
+              {/* Restore Hasil Ujian */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Restore Hasil Ujian</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Pilih file <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700 font-mono text-[11px]">.json</code> rekap pengerjaan siswa.
+                  </p>
+                </div>
+                <label className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs">
+                  <Upload className="w-4 h-4 text-emerald-400" />
+                  <span>Upload File Hasil</span>
+                  <input type="file" accept=".json" onChange={handleRestoreHasilFile} className="hidden" />
+                </label>
+              </div>
+
+              {/* Restore Data Siswa */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-3">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Restore Data Siswa</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Pilih file <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono text-[11px]">.json</code> data siswa.
+                  </p>
+                </div>
+                <label className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs">
+                  <Upload className="w-4 h-4 text-purple-400" />
+                  <span>Upload File Siswa</span>
+                  <input type="file" accept=".json" onChange={handleRestoreSiswaFile} className="hidden" />
+                </label>
+              </div>
+
+              {/* Restore Data Guru */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-base">Restore Data Guru</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Pilih file <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono text-[11px]">.json</code> data guru/staf.
+                  </p>
+                </div>
+                <label className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs">
+                  <Upload className="w-4 h-4 text-amber-400" />
+                  <span>Upload File Guru</span>
+                  <input type="file" accept=".json" onChange={handleRestoreGuruFile} className="hidden" />
+                </label>
+              </div>
+
+            </div>
+
+            {/* Restore Full Master Banner */}
+            <div className="mt-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 rounded-2xl text-white flex flex-col md:flex-row items-center justify-between gap-4 border border-indigo-500/20 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold shrink-0">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base">Restore Master System (All-in-One)</h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Pulihkan sekaligus seluruh database sistem (Soal, Hasil Ujian, Siswa, Guru, dan Jadwal) dari 1 file backup komplit.
+                  </p>
+                </div>
+              </div>
+
+              <label className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-6 py-3 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-all shadow-md shrink-0 active:scale-95">
+                <Upload className="w-4 h-4" />
+                <span>Upload Backup Master Full</span>
+                <input type="file" accept=".json" onChange={handleRestoreMasterFullFile} className="hidden" />
+              </label>
+            </div>
+
+          </div>
+
         </div>
       )}
 

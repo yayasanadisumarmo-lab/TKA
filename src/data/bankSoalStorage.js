@@ -257,3 +257,12 @@ export function deleteQuestionFromMapel(mapelId, questionId) {
   }
   return bank[mapelId]?.questions || [];
 }
+
+// Save or Restore full bank soal object
+export function saveFullBankSoal(bankObj) {
+  if (bankObj && typeof bankObj === 'object') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bankObj));
+    return true;
+  }
+  return false;
+}
